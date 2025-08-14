@@ -124,8 +124,7 @@ private:
             libusb_receive_transfer_, libusb_device_handle_, in_endpoint_,
             reinterpret_cast<unsigned char*>(receive_buffer_), max_receive_length_,
             [](libusb_transfer* transfer) {
-                static_cast<Driver*>(transfer->user_data)
-                    ->libusb_receive_complete_callback(transfer);
+                static_cast<Driver*>(transfer->user_data)->usb_receive_complete_callback(transfer);
             },
             this, 0);
 
@@ -206,13 +205,13 @@ private:
         return selected_device;
     }
 
-    void libusb_receive_complete_callback(libusb_transfer* transfer) {
+    void usb_receive_complete_callback(libusb_transfer* transfer) {
         if (!handling_events_.load(std::memory_order::relaxed)) [[unlikely]] {
             receive_transfer_busy_ = false;
             return;
         }
 
-        static_cast<Client*>(this)->usb_receive_callback(receive_buffer_, transfer->actual_length);
+        static_cast<Client*>(this)->receive_transfer_completed_callback(transfer);
 
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
@@ -231,6 +230,7 @@ private:
     static constexpr unsigned char out_endpoint_ = 0x01;
     static constexpr unsigned char in_endpoint_ = 0x81;
 
+    static constexpr int max_transmit_length_ = 1024;
     static constexpr int max_receive_length_ = 1024;
 
     libusb_context* libusb_context_;

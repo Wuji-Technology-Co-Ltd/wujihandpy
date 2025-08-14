@@ -30,7 +30,7 @@ public:
 
                 libusb_fill_bulk_transfer(
                     transfer, driver_.libusb_device_handle_, Driver::out_endpoint_,
-                    new unsigned char[64], prefill_size_,
+                    new unsigned char[max_transmit_length_], prefill_size_,
                     [](libusb_transfer* transfer) {
                         static_cast<AsyncTransmitBuffer*>(transfer->user_data)
                             ->usb_transmit_complete_callback(transfer);
@@ -87,26 +87,19 @@ public:
             break;
         }
     }
-    std::byte* try_fetch_buffer(size_t size) {
-        return try_fetch_buffer(size, [&size](size_t) { return size; });
+
+    std::byte* try_fetch_buffer(int size) {
+        return try_fetch_buffer(
+            [&size](int free_size, libusb_transfer*) { return free_size >= size; },
+            [&size](int) { return size; });
     }
 
-    bool trigger_transmission() {
-        auto front = free_transfers_.front();
-        if (!front || (*front)->length <= 1)
-            return false;
-
-        return trigger_transmission_nocheck();
-    }
-
-private:
-    template <typename F>
-    requires requires(const F& f, size_t free_space) {
-        { f(free_space) } -> std::convertible_to<size_t>;
-    } std::byte* try_fetch_buffer(size_t min_size, const F& actual_size) {
-        if (1 + min_size > 64) [[unlikely]]
-            return nullptr;
-
+    template <typename F1, typename F2>
+    requires requires(const F1& f, int free_size, libusb_transfer* transfer) {
+        { f(free_size, transfer) } -> std::convertible_to<bool>;
+    } && requires(const F2& f, int free_size) {
+        { f(free_size) } -> std::convertible_to<int>;
+    } std::byte* try_fetch_buffer(const F1& check_transfer, const F2& get_actual_size) {
         while (true) {
             auto front = free_transfers_.front();
             if (!front) [[unlikely]] {
@@ -119,11 +112,11 @@ private:
 
             libusb_transfer* transfer = *front;
 
-            size_t free_size = 64 - transfer->length;
-            if (free_size < min_size)
+            auto free_size = max_transmit_length_ - transfer->length;
+            if (!check_transfer(free_size, transfer))
                 trigger_transmission_nocheck();
             else {
-                size_t size = actual_size(free_size);
+                int size = get_actual_size(free_size);
                 if (free_size < size) [[unlikely]]
                     return nullptr;
                 std::byte* buffer =
@@ -134,16 +127,28 @@ private:
         }
     }
 
+    bool trigger_transmission() {
+        auto front = free_transfers_.front();
+        if (!front || (*front)->length <= prefill_size_)
+            return false;
+
+        return trigger_transmission_nocheck();
+    }
+
+private:
     bool trigger_transmission_nocheck() {
         libusb_transfer* transfer = nullptr;
 
         if (!free_transfers_.pop_front([&transfer](libusb_transfer* t) { transfer = t; }))
             return false;
-
         // The transfer must be submitted to libusb only after the pop_front function returns.
         // Otherwise, there is a very slight chance that the callback might be invoked too
         // quickly, resulting in a false "ring queue full" condition when recycling transfer,
         // which could subsequently lead to transfer leaks.
+
+        LOG_INFO("aaa %d", transfer->length);
+
+        static_cast<Client&>(driver_).before_submitting_transmit_transfer(transfer);
 
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
@@ -170,6 +175,8 @@ private:
                 transfer->length);
 
         transfer->length = prefill_size_;
+
+        static_cast<Client&>(driver_).transmit_transfer_completed_callback(transfer);
 
         if (!free_transfers_.push_back(transfer)) [[unlikely]] {
             LOG_ERROR(

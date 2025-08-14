@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstddef>
-#include <cstring>
 
 #include <algorithm>
 #include <atomic>
 
 namespace utility {
 
+// Lock-free Single-Producer/Single-Consumer (SPSC) ring buffer
+// Inspired by Linux kfifo. Avoids CAS operations for zero-contention.
 template <typename T>
 class RingBuffer {
 public:
