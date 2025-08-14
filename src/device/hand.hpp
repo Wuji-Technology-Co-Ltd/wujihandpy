@@ -8,11 +8,11 @@
 
 #include <libusb.h>
 
-#include "client/protocol.hpp"
+#include "device/protocol.hpp"
 #include "driver/async_transmit_buffer.hpp"
 #include "driver/driver.hpp"
 
-namespace client {
+namespace device {
 class Hand : driver::Driver<Hand> {
     friend class Driver<Hand>;
     friend class AsyncTransmitBuffer<protocol::Header>;
@@ -74,28 +74,27 @@ private:
         } description{
             .max_receive_window = 0xA0, .frame_length = (uint8_t)(compressed_frame_length - 1)};
         header.description = std::bit_cast<int16_t>(description);
-
-        std::cout << std::format("Transmitting {} bytes: ", transfer->length);
-        for (int i = 0; i < transfer->length; ++i) {
-            std::cout << std::format("{:02x} ", static_cast<unsigned char>(transfer->buffer[i]));
-        }
-        std::cout << '\n';
     }
 
     static void transmit_transfer_completed_callback(libusb_transfer* transfer) {
         auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
         header.type = 0;
+        std::cout << std::format("Transmitted {} bytes: ", transfer->actual_length);
+        // for (int i = 0; i < transfer->length; ++i) {
+        //     std::cout << std::format("{:02x} ", static_cast<unsigned char>(transfer->buffer[i]));
+        // }
+        std::cout << '\n';
     }
 
     static void receive_transfer_completed_callback(libusb_transfer* transfer) {
         std::cout << std::format("Received {} bytes: ", transfer->actual_length);
-        for (int i = 0; i < transfer->actual_length; ++i) {
-            std::cout << std::format("{:02x} ", static_cast<unsigned char>(transfer->buffer[i]));
-        }
+        // for (int i = 0; i < transfer->actual_length; ++i) {
+        //     std::cout << std::format("{:02x} ", static_cast<unsigned char>(transfer->buffer[i]));
+        // }
         std::cout << '\n';
     }
 
     AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;
 };
 
-} // namespace client
+} // namespace device

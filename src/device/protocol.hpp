@@ -5,7 +5,7 @@
 #include "utility/cross_os.hpp"
 #include "utility/endian_promise.hpp"
 
-namespace client::protocol {
+namespace device::protocol {
 
 PACKED_STRUCT(Header) {
     uint16_t header = 0x55aa;
@@ -27,4 +27,4 @@ PACKED_STRUCT(SdoPayload) {
 
 PACKED_STRUCT(CrcCheck) { uint16_t value; };
 
-} // namespace client::protocol
+} // namespace device::protocol

@@ -13,9 +13,9 @@
 
 namespace driver {
 
-template <typename Client>
+template <typename Device>
 template <is_legal_transfer_prefill TransferPrefill>
-class Driver<Client>::AsyncTransmitBuffer final {
+class Driver<Device>::AsyncTransmitBuffer final {
 public:
     explicit AsyncTransmitBuffer(Driver& driver, size_t alloc_transfer_count)
         : driver_(driver)
@@ -146,9 +146,7 @@ private:
         // quickly, resulting in a false "ring queue full" condition when recycling transfer,
         // which could subsequently lead to transfer leaks.
 
-        LOG_INFO("aaa %d", transfer->length);
-
-        static_cast<Client&>(driver_).before_submitting_transmit_transfer(transfer);
+        static_cast<Device&>(driver_).before_submitting_transmit_transfer(transfer);
 
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
@@ -176,7 +174,7 @@ private:
 
         transfer->length = prefill_size_;
 
-        static_cast<Client&>(driver_).transmit_transfer_completed_callback(transfer);
+        static_cast<Device&>(driver_).transmit_transfer_completed_callback(transfer);
 
         if (!free_transfers_.push_back(transfer)) [[unlikely]] {
             LOG_ERROR(

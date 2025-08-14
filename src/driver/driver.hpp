@@ -17,7 +17,7 @@ template <typename TransferPrefill>
 concept is_legal_transfer_prefill =
     std::is_same_v<TransferPrefill, void> || alignof(TransferPrefill) == 1;
 
-template <typename Client>
+template <typename Device>
 class Driver {
 public:
     template <is_legal_transfer_prefill TransferPrefill = void>
@@ -211,7 +211,7 @@ private:
             return;
         }
 
-        static_cast<Client*>(this)->receive_transfer_completed_callback(transfer);
+        static_cast<Device*>(this)->receive_transfer_completed_callback(transfer);
 
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
@@ -230,8 +230,8 @@ private:
     static constexpr unsigned char out_endpoint_ = 0x01;
     static constexpr unsigned char in_endpoint_ = 0x81;
 
-    static constexpr int max_transmit_length_ = 1024;
-    static constexpr int max_receive_length_ = 1024;
+    static constexpr int max_transmit_length_ = 512;
+    static constexpr int max_receive_length_ = 512;
 
     libusb_context* libusb_context_;
     libusb_device_handle* libusb_device_handle_;

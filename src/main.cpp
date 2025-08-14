@@ -1,10 +1,10 @@
 #include <thread>
 
-#include "client/hand.hpp"
 #include "data/spinal.hpp"
+#include "device/hand.hpp"
 
 int main() {
-    client::Hand hand{0x0483, 0x5740};
+    device::Hand hand{0x0483, 0x5740};
     std::jthread thread{[&hand]() { hand.handle_events(); }};
 
     using namespace std::chrono_literals;
