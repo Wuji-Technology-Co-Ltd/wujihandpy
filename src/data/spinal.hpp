@@ -7,17 +7,19 @@
 namespace data::spinal {
 
 namespace firmware_infomation {
+constexpr uint16_t index = 0x5201;
 
-struct FirmwareVersion : helper::DataStruct<0x5201, 1, uint32_t> {};
-struct FirmwareDate : helper::DataStruct<0x5201, 2, uint32_t> {};
+using FirmwareVersion = SpecializedData<index, 1, uint32_t>;
+using FirmwareDate = SpecializedData<index, 2, uint32_t>;
 
 }; // namespace firmware_infomation
 
 namespace monitor_infomation {
+constexpr uint16_t index = 0x520A;
 
-struct SystemTime : helper::DataStruct<0x520A, 1, uint32_t> {};
-struct McuTemperature : helper::DataStruct<0x520A, 9, float> {};
-struct InputVoltage : helper::DataStruct<0x520A, 10, float> {};
+using SystemTime = SpecializedData<index, 1, uint32_t>;
+using McuTemperature = SpecializedData<index, 9, float>;
+using InputVoltage = SpecializedData<index, 10, float>;
 
 }; // namespace monitor_infomation
 
