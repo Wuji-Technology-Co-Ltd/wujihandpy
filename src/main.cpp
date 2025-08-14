@@ -6,29 +6,9 @@
 #include <iostream>
 #include <thread>
 
-#include "driver/usb_bulk.hpp"
+#include "client/hand.hpp"
 #include "utility/cross_os.hpp"
 #include "utility/endian_promise.hpp"
-
-class Hand : driver::UsbBulk {
-public:
-    explicit Hand(uint16_t usb_vid, int32_t usb_pid)
-        : UsbBulk(usb_vid, usb_pid) {}
-
-    using UsbBulk::usb_transmit;
-
-    using UsbBulk::handle_events;
-    using UsbBulk::stop_handling_events;
-
-private:
-    void usb_receive_callback(const std::byte* buffer, int length) override {
-        std::cout << std::format("Received {} bytes: ", length);
-        for (int i = 0; i < length; ++i) {
-            std::cout << std::format("{:02x} ", static_cast<unsigned char>(buffer[i]));
-        }
-        std::cout << '\n';
-    }
-};
 
 constexpr size_t calculate_compressed_frame_length(size_t payload_size) {
     return (8 + payload_size - 1) / 16 + 1;
@@ -38,7 +18,7 @@ constexpr size_t calculate_padding_size(size_t payload_size) {
     return 16 * calculate_compressed_frame_length(payload_size) - (8 + payload_size);
 }
 
-constexpr int16_t make_control_field(uint8_t frame_length, uint16_t max_receive_window) {
+constexpr int16_t make_description_field(uint8_t frame_length, uint16_t max_receive_window) {
     struct {
         uint16_t max_receive_window : 10;
         uint16_t frame_length       : 6;
@@ -62,7 +42,7 @@ PACKED_STRUCT(Header) {
     uint8_t source = 0x00;
     uint8_t destination = 0xa0;
 
-    utility::be_uint16_t control;
+    utility::be_uint16_t description;
 };
 
 PACKED_STRUCT(Payload) {
@@ -75,7 +55,7 @@ PACKED_STRUCT(Payload) {
 };
 
 PACKED_STRUCT(Frame) {
-    Header header{.control = make_control_field(sizeof(Frame) / 16 - 1, 0xa0)};
+    Header header{.description = make_description_field(sizeof(Frame) / 16 - 1, 0xa0)};
 
     PaddedStruct<Payload> payload{};
 
@@ -83,7 +63,7 @@ PACKED_STRUCT(Frame) {
 };
 
 int main() {
-    Hand hand{0x0483, 0x5740};
+    client::Hand hand{0x0483, 0x5740};
 
     Frame frame;
 

@@ -13,15 +13,23 @@
 
 namespace driver {
 
-class UsbBulk {
+template <typename TransferPrefill>
+concept is_legal_transfer_prefill =
+    std::is_same_v<TransferPrefill, void> || alignof(TransferPrefill) == 1;
+
+template <typename Client>
+class Driver {
 public:
-    explicit UsbBulk(uint16_t usb_vid, int32_t usb_pid) {
+    template <is_legal_transfer_prefill TransferPrefill = void>
+    class AsyncTransmitBuffer;
+
+    explicit Driver(uint16_t usb_vid, int32_t usb_pid) {
         if (!init(usb_vid, usb_pid)) {
             throw std::runtime_error{"Failed to init."};
         }
     }
 
-    virtual ~UsbBulk() {
+    virtual ~Driver() {
         libusb_free_transfer(libusb_receive_transfer_);
         libusb_release_interface(libusb_device_handle_, target_interface_);
         libusb_close(libusb_device_handle_);
@@ -64,11 +72,6 @@ public:
     }
 
     void stop_handling_events() { handling_events_.store(false, std::memory_order::relaxed); }
-
-    virtual void usb_receive_callback(const std::byte* buffer, int length) {
-        (void)buffer;
-        (void)length;
-    };
 
 private:
     bool init(uint16_t vendor_id, int32_t product_id) noexcept {
@@ -121,7 +124,7 @@ private:
             libusb_receive_transfer_, libusb_device_handle_, in_endpoint_,
             reinterpret_cast<unsigned char*>(receive_buffer_), max_receive_length_,
             [](libusb_transfer* transfer) {
-                static_cast<UsbBulk*>(transfer->user_data)
+                static_cast<Driver*>(transfer->user_data)
                     ->libusb_receive_complete_callback(transfer);
             },
             this, 0);
@@ -209,7 +212,7 @@ private:
             return;
         }
 
-        usb_receive_callback(receive_buffer_, transfer->actual_length);
+        static_cast<Client*>(this)->usb_receive_callback(receive_buffer_, transfer->actual_length);
 
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
