@@ -53,7 +53,7 @@ requires(std::is_integral_v<T> || std::is_floating_point_v<T>) PACKED_STRUCT(end
     endian_t() = default;
 
     // Storage in
-    endian_t(const T& value) noexcept
+    endian_t(const T& value) noexcept // NOLINT(google-explicit-constructor)
         : value_buffer(transform(value)) {}
 
     template <typename U>

@@ -52,33 +52,23 @@ public:
     }
 
     void handle_events() {
-        auto ret = libusb_submit_transfer(libusb_receive_transfer_);
-        if (ret != 0) [[unlikely]] {
-            if (ret == LIBUSB_ERROR_NO_DEVICE)
-                LOG_ERROR(
-                    "Failed to submit receive transfer: Device disconnected. "
-                    "Terminating...");
-            else
-                LOG_ERROR("Failed to submit receive transfer: %d. Terminating...", ret);
-            std::terminate();
-            return;
-        }
-
-        handling_events_.store(true, std::memory_order::relaxed);
-        receive_transfer_busy_ = true;
         while (receive_transfer_busy_) {
             libusb_handle_events(libusb_context_);
         }
     }
 
-    void stop_handling_events() { handling_events_.store(false, std::memory_order::relaxed); }
+    void stop_handling_events() {
+        handling_events_.store(false, std::memory_order::relaxed);
+        libusb_cancel_transfer(libusb_receive_transfer_);
+        // TODO: Very low probability of race condition.
+    }
 
 private:
     bool init(uint16_t vendor_id, int32_t product_id) noexcept {
         int ret;
 
         ret = libusb_init(&libusb_context_);
-        if (ret != 0) {
+        if (ret != 0) [[unlikely]] {
             LOG_ERROR("Failed to init libusb: %d", ret);
             return false;
         }
@@ -89,7 +79,7 @@ private:
             return false;
 
         ret = libusb_open(selected_device, &libusb_device_handle_);
-        if (ret != 0) {
+        if (ret != 0) [[unlikely]] {
             LOG_ERROR(
                 "Device with vendor id: 0x%x and product id: 0x%x was successfully detected but "
                 "could not be opened: %d",
@@ -100,14 +90,14 @@ private:
 
         if constexpr (utility::is_linux()) {
             ret = libusb_set_auto_detach_kernel_driver(libusb_device_handle_, true);
-            if (ret != 0) {
+            if (ret != 0) [[unlikely]] {
                 LOG_ERROR("Failed to set auto detach kernel driver: %d", ret);
                 return false;
             }
         }
 
         ret = libusb_claim_interface(libusb_device_handle_, target_interface_);
-        if (ret != 0) {
+        if (ret != 0) [[unlikely]] {
             LOG_ERROR("Failed to claim interface: %d", ret);
             return false;
         }
@@ -115,7 +105,7 @@ private:
             [this]() { libusb_release_interface(libusb_device_handle_, target_interface_); }};
 
         libusb_receive_transfer_ = libusb_alloc_transfer(0);
-        if (!libusb_receive_transfer_) {
+        if (!libusb_receive_transfer_) [[unlikely]] {
             LOG_ERROR("Failed to alloc receive transfer");
             return false;
         }
@@ -127,6 +117,11 @@ private:
                 static_cast<Driver*>(transfer->user_data)->usb_receive_complete_callback(transfer);
             },
             this, 0);
+        ret = libusb_submit_transfer(libusb_receive_transfer_);
+        if (ret != 0) [[unlikely]] {
+            LOG_ERROR("Failed to submit receive transfer: %d", ret);
+            return false;
+        }
 
         // Libusb successfully initialized.
         release_interface.disable();
@@ -239,8 +234,8 @@ private:
     libusb_transfer* libusb_receive_transfer_;
     std::byte receive_buffer_[max_receive_length_];
 
-    std::atomic<bool> handling_events_ = false;
-    bool receive_transfer_busy_ = false;
+    std::atomic<bool> handling_events_ = true;
+    bool receive_transfer_busy_ = true;
 };
 
 } // namespace driver

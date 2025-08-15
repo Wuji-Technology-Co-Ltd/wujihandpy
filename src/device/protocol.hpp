@@ -24,7 +24,7 @@ namespace sdo {
 
 PACKED_STRUCT(Read {
     uint8_t control;
-    utility::be_uint16_t index;
+    uint16_t index;
     uint8_t sub_index;
 });
 
@@ -32,7 +32,7 @@ template <typename T>
 requires(std::is_integral_v<T> && std::is_unsigned_v<T>) PACKED_STRUCT(ReadResult {
     PACKED_STRUCT({
         uint8_t control;
-        utility::be_uint16_t index;
+        uint16_t index;
         uint8_t sub_index;
     })
     header;

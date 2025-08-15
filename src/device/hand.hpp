@@ -13,7 +13,6 @@
 
 #include <libusb.h>
 
-#include "data/helper.hpp"
 #include "device/protocol.hpp"
 #include "driver/async_transmit_buffer.hpp"
 #include "driver/driver.hpp"
@@ -27,14 +26,10 @@ public:
     explicit Hand(uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count = 32)
         : Driver(usb_vid, usb_pid)
         , default_transmit_buffer_(*this, buffer_transfer_count)
+        , event_thread_([this]() { handle_events(); })
         , sync_read_thread_id_(std::this_thread::get_id()) {}
 
-    virtual ~Hand() = default;
-
-    using Driver::usb_transmit;
-
-    using Driver::handle_events;
-    using Driver::stop_handling_events;
+    virtual ~Hand() { stop_handling_events(); };
 
     template <typename T>
     T::DataType read_data() {
@@ -52,16 +47,12 @@ public:
             .index = T::index,
             .sub_index = T::sub_index,
         });
-        sync_read_flag_.store(flag, std::memory_order::release);
+        sync_read_flag_.store(flag, std::memory_order::relaxed);
         read_data_async<T>();
         trigger_transmission();
         sync_read_flag_.wait(flag);
 
-        return sync_read_data_.load(std::memory_order::acquire).as<typename T::DataType>();
-    }
-
-    void set_data_read_complete_callback(auto&& callable) {
-        data_read_complete_callback_ = callable;
+        return sync_read_data_.load(std::memory_order::relaxed).as<typename T::DataType>();
     }
 
     template <typename T>
@@ -146,15 +137,16 @@ private:
     void read_sdo_data(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::ReadResult<T>*>(pointer);
         pointer += sizeof(data);
-        if (sync_read_flag_.load(std::memory_order::acquire)
+        if (sync_read_flag_.load(std::memory_order::relaxed)
             == std::bit_cast<uint32_t>(data.header)) {
-            sync_read_data_.store(SyncReadData{data.data}, std::memory_order::release);
-            sync_read_flag_.store(0, std::memory_order::release);
+            sync_read_data_.store(SyncReadData{data.data}, std::memory_order::relaxed);
+            sync_read_flag_.store(0, std::memory_order::relaxed);
             sync_read_flag_.notify_one();
         }
     }
 
     AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;
+    std::jthread event_thread_;
 
     const std::thread::id sync_read_thread_id_;
     std::atomic<uint32_t> sync_read_flag_ = 0;
@@ -190,8 +182,6 @@ private:
     };
     std::atomic<SyncReadData> sync_read_data_;
     static_assert(std::atomic<SyncReadData>::is_always_lock_free);
-
-    std::function<void(const data::Data&)> data_read_complete_callback_;
 };
 
 } // namespace device
