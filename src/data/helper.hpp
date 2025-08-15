@@ -8,12 +8,12 @@
 
 namespace data {
 
-constexpr size_t data_length_max = 8;
+constexpr size_t data_length_max = 4;
 
-PACKED_STRUCT(Data) {
+PACKED_STRUCT(Data {
+    uint8_t control;
     uint16_t index;
     uint8_t sub_index;
-    uint8_t data_length;
     uint8_t data[data_length_max];
 
     Data() = default;
@@ -25,7 +25,7 @@ PACKED_STRUCT(Data) {
     Data& operator=(const Data&) = delete;
     Data(Data&&) = delete;
     Data& operator=(Data&&) = delete;
-};
+});
 
 template <uint16_t index_, uint8_t sub_index_, typename DataType_, bool writable_ = false>
 struct SpecializedData {
@@ -33,6 +33,19 @@ struct SpecializedData {
     static constexpr uint8_t sub_index = sub_index_;
 
     using DataType = DataType_;
+    static constexpr uint8_t read_control = 0x30;
+    static constexpr uint8_t read_result_control = []() constexpr {
+        if constexpr (sizeof(DataType) == 1)
+            return 0x35;
+        else if constexpr (sizeof(DataType) == 2)
+            return 0x37;
+        else if constexpr (sizeof(DataType) == 4)
+            return 0x39;
+        else if constexpr (sizeof(DataType) == 8)
+            return 0x3D;
+        else
+            return 0x00;
+    }();
 
     static constexpr bool writable = writable_;
 

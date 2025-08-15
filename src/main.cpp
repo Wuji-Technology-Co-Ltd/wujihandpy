@@ -8,10 +8,10 @@ int main() {
     std::jthread thread{[&hand]() { hand.handle_events(); }};
 
     using namespace std::chrono_literals;
+
     while (true) {
-        hand.read_data_async<data::spinal::monitor_infomation::SystemTime>();
-        hand.read_data_async<data::spinal::monitor_infomation::McuTemperature>();
-        hand.trigger_transmission();
+        std::cout << hand.read_data<data::spinal::monitor_infomation::SystemTime>() << '\n';
+        std::cout << hand.read_data<data::spinal::monitor_infomation::McuTemperature>() << '\n';
         std::this_thread::sleep_for(500ms);
     }
 }

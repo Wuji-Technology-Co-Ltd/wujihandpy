@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 #include "utility/cross_os.hpp"
 #include "utility/endian_promise.hpp"
 
 namespace device::protocol {
 
-PACKED_STRUCT(Header) {
+PACKED_STRUCT(Header {
     uint16_t header = 0x55aa;
 
     uint8_t source = 0x00;
@@ -17,14 +18,29 @@ PACKED_STRUCT(Header) {
 
     uint8_t type = 0;
     uint8_t prefix = 0x00;
-};
+});
 
-PACKED_STRUCT(SdoPayload) {
+namespace sdo {
+
+PACKED_STRUCT(Read {
     uint8_t control;
     utility::be_uint16_t index;
     uint8_t sub_index;
-};
+});
 
-PACKED_STRUCT(CrcCheck) { uint16_t value; };
+template <typename T>
+requires(std::is_integral_v<T> && std::is_unsigned_v<T>) PACKED_STRUCT(ReadResult {
+    PACKED_STRUCT({
+        uint8_t control;
+        utility::be_uint16_t index;
+        uint8_t sub_index;
+    })
+    header;
+    T data;
+});
+
+} // namespace sdo
+
+PACKED_STRUCT(CrcCheck { uint16_t value; });
 
 } // namespace device::protocol
