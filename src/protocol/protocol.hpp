@@ -20,22 +20,52 @@ PACKED_STRUCT(Header {
     uint8_t prefix = 0x00;
 });
 
+template <typename T>
+concept is_type_erased_integral = std::is_integral_v<T> && std::is_unsigned_v<T>;
+
 namespace sdo {
 
 PACKED_STRUCT(Read {
-    uint8_t control;
-    uint16_t index;
+    uint8_t control = 0x30;
+    utility::be_uint16_t index;
     uint8_t sub_index;
 });
 
-template <typename T>
-requires(std::is_integral_v<T> && std::is_unsigned_v<T>) PACKED_STRUCT(ReadResult {
+template <is_type_erased_integral T>
+PACKED_STRUCT(ReadResultSuccess {
     PACKED_STRUCT({
         uint8_t control;
-        uint16_t index;
+        utility::be_uint16_t index;
         uint8_t sub_index;
     })
     header;
+    T data;
+});
+
+PACKED_STRUCT(ReadResultError {
+    PACKED_STRUCT({
+        uint8_t control;
+        utility::be_uint16_t index;
+        uint8_t sub_index;
+    })
+    header;
+    uint32_t err_code;
+});
+
+template <is_type_erased_integral T>
+PACKED_STRUCT(Write {
+    uint8_t control = []() constexpr {
+        if constexpr (sizeof(T) == 1)
+            return 0x20;
+        else if constexpr (sizeof(T) == 2)
+            return 0x22;
+        else if constexpr (sizeof(T) == 4)
+            return 0x24;
+        else if constexpr (sizeof(T) == 8)
+            return 0x28;
+    }();
+    utility::be_uint16_t index;
+    uint8_t sub_index;
     T data;
 });
 

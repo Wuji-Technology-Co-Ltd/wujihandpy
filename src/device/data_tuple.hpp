@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 namespace device {
 
@@ -29,7 +30,7 @@ class DataTuple {
 
     template <int id>
     static constexpr int match_index_internal(const uint16_t, const uint8_t) {
-        return -1;
+        return std::numeric_limits<int>::min();
     }
 
 public:

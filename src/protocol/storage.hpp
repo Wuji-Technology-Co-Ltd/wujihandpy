@@ -12,12 +12,14 @@ class BasicStorageUnit {
 public:
     BasicStorageUnit() = default;
 
-    uint32_t data_version() { return data_version_.load(std::memory_order::acquire); }
+    uint32_t data_token() { return data_token_.load(std::memory_order::acquire); }
 
-    void wait(uint32_t old_data_version) {
+    bool wait(uint32_t old_data_token) {
         waiting_count_.fetch_add(1, std::memory_order::relaxed);
-        data_version_.wait(old_data_version, std::memory_order::acquire);
+        data_token_.wait(old_data_token, std::memory_order::acquire);
         waiting_count_.fetch_sub(1, std::memory_order::relaxed);
+
+        return data_token_.load(std::memory_order::relaxed) & 1;
     }
 
     template <typename T>
@@ -50,11 +52,12 @@ public:
         auto data_union = DataUnion{data};
         data_.store(data_union, std::memory_order::relaxed);
 
-        auto version = data_version_.load(std::memory_order::relaxed);
-        data_version_.store(1 | (version + 1), std::memory_order::release);
+        auto token = data_token_.load(std::memory_order::relaxed);
+        token = (token & ~3) + 4 + 1;
+        data_token_.store(token, std::memory_order::release);
 
         if (waiting_count_.load(std::memory_order::acquire))
-            data_version_.notify_all();
+            data_token_.notify_all();
 
         void (*callback)(DataUnion, uint64_t);
         uint64_t callback_context;
@@ -65,6 +68,17 @@ public:
             callback_context = callback_context_.load(std::memory_order::acquire);
         } while (callback_.load(std::memory_order::acquire) != callback);
         callback(data_union, callback_context);
+    }
+
+    void error(uint32_t err_code) {
+        (void)err_code;
+
+        auto token = data_token_.load(std::memory_order::relaxed);
+        token = (token & ~3) + 4 + 2;
+        data_token_.store(token, std::memory_order::release);
+
+        if (waiting_count_.load(std::memory_order::acquire))
+            data_token_.notify_all();
     }
 
 private:
@@ -98,10 +112,10 @@ private:
     };
 
     std::atomic<DataUnion> data_;
-    std::atomic<uint32_t> data_version_ = 0;
+    std::atomic<uint32_t> data_token_ = 0;
     std::atomic<uint32_t> waiting_count_ = 0;
     static_assert(decltype(data_)::is_always_lock_free);
-    static_assert(decltype(data_version_)::is_always_lock_free);
+    static_assert(decltype(data_token_)::is_always_lock_free);
 
     std::atomic<void (*)(DataUnion, uint64_t)> callback_ = nullptr;
     std::atomic<uint64_t> callback_context_;
