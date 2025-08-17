@@ -27,6 +27,18 @@ PACKED_STRUCT(Data {
     Data& operator=(Data&&) = delete;
 });
 
+template <typename Base_, uint16_t index_, uint8_t sub_index_, typename ValueType_>
+struct TestData {
+    using Base = Base_;
+
+    TestData() = delete;
+
+    static constexpr uint16_t index = index_;
+    static constexpr uint8_t sub_index = sub_index_;
+
+    using ValueType = ValueType_;
+};
+
 template <uint16_t index_, uint8_t sub_index_, typename DataType_, bool writable_ = false>
 struct SpecializedData {
     static constexpr uint16_t index = index_;
@@ -48,28 +60,6 @@ struct SpecializedData {
     }();
 
     static constexpr bool writable = writable_;
-
-    // NOLINTNEXTLINE(google-explicit-constructor)
-    ALWAYS_INLINE SpecializedData(const Data& data) {
-        if (data.index == index && data.sub_index == sub_index) {
-            std::memcpy(&data_, data.data, sizeof(DataType));
-            available_ = true;
-        } else {
-            available_ = false;
-        }
-    }
-
-    ALWAYS_INLINE explicit operator bool() const { return available_; }
-
-    ALWAYS_INLINE DataType& operator*() { return data_; }
-    ALWAYS_INLINE const DataType& operator*() const { return data_; }
-
-    ALWAYS_INLINE DataType* operator->() { return &data_; }
-    ALWAYS_INLINE const DataType* operator->() const { return &data_; }
-
-private:
-    DataType data_;
-    bool available_;
 };
 
 } // namespace data

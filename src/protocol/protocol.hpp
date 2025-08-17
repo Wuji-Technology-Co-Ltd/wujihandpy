@@ -6,7 +6,7 @@
 #include "utility/cross_os.hpp"
 #include "utility/endian_promise.hpp"
 
-namespace device::protocol {
+namespace protocol::protocol {
 
 PACKED_STRUCT(Header {
     uint16_t header = 0x55aa;
@@ -43,4 +43,4 @@ requires(std::is_integral_v<T> && std::is_unsigned_v<T>) PACKED_STRUCT(ReadResul
 
 PACKED_STRUCT(CrcCheck { uint16_t value; });
 
-} // namespace device::protocol
+} // namespace protocol::protocol
