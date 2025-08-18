@@ -17,7 +17,7 @@ class Hand : public DataOperator<Hand> {
 
 public:
     Hand(uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count = 64)
-        : handler_(usb_vid, usb_pid, buffer_transfer_count, 200, index_to_storage_id) {};
+        : handler_(usb_vid, usb_pid, buffer_transfer_count, data_count(), index_to_storage_id) {};
 
     Finger finger(int index) { return sub(index); }
 

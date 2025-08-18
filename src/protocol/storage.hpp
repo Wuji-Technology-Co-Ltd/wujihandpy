@@ -8,18 +8,33 @@
 
 namespace protocol {
 
-class BasicStorageUnit {
+struct OperationToken {
+    uint16_t token;
+    uint16_t data_version;
+    uint32_t err_code;
+
+    constexpr static OperationToken initial() {
+        return OperationToken{
+            .token = 0,
+            .data_version = 0,
+            .err_code = 0,
+        };
+    }
+};
+static_assert(sizeof(OperationToken) == 8);
+
+class StorageUnit {
 public:
-    BasicStorageUnit() = default;
+    StorageUnit() = default;
 
-    uint32_t data_token() { return data_token_.load(std::memory_order::acquire); }
+    OperationToken data_token() { return data_token_.load(std::memory_order::acquire); }
 
-    bool wait(uint32_t old_data_token) {
+    OperationToken wait(OperationToken old_data_token) {
         waiting_count_.fetch_add(1, std::memory_order::relaxed);
         data_token_.wait(old_data_token, std::memory_order::acquire);
         waiting_count_.fetch_sub(1, std::memory_order::relaxed);
 
-        return data_token_.load(std::memory_order::relaxed) & 1;
+        return data_token_.load(std::memory_order::relaxed);
     }
 
     template <typename T>
@@ -48,37 +63,35 @@ public:
     }
 
     template <typename T>
-    void write(const T& data) {
+    void update(const T& data) {
         auto data_union = DataUnion{data};
         data_.store(data_union, std::memory_order::relaxed);
 
-        auto token = data_token_.load(std::memory_order::relaxed);
-        token = (token & ~3) + 4 + 1;
-        data_token_.store(token, std::memory_order::release);
-
-        if (waiting_count_.load(std::memory_order::acquire))
-            data_token_.notify_all();
-
-        void (*callback)(DataUnion, uint64_t);
-        uint64_t callback_context;
-        do {
-            callback = callback_.load(std::memory_order::acquire);
-            if (!callback)
-                return;
-            callback_context = callback_context_.load(std::memory_order::acquire);
-        } while (callback_.load(std::memory_order::acquire) != callback);
-        callback(data_union, callback_context);
+        update(true, 0);
     }
 
-    void error(uint32_t err_code) {
-        (void)err_code;
-
+    void update(bool new_data, uint32_t err_code) {
         auto token = data_token_.load(std::memory_order::relaxed);
-        token = (token & ~3) + 4 + 2;
+        token.token++;
+        if (new_data) {
+            if (++token.data_version == 0)
+                token.data_version = 1;
+        }
+        token.err_code = err_code;
         data_token_.store(token, std::memory_order::release);
 
         if (waiting_count_.load(std::memory_order::acquire))
             data_token_.notify_all();
+
+        // void (*callback)(DataUnion, uint64_t);
+        // uint64_t callback_context;
+        // do {
+        //     callback = callback_.load(std::memory_order::acquire);
+        //     if (!callback)
+        //         return;
+        //     callback_context = callback_context_.load(std::memory_order::acquire);
+        // } while (callback_.load(std::memory_order::acquire) != callback);
+        // callback(data_union, callback_context);
     }
 
 private:
@@ -112,19 +125,16 @@ private:
     };
 
     std::atomic<DataUnion> data_;
-    std::atomic<uint32_t> data_token_ = 0;
-    std::atomic<uint32_t> waiting_count_ = 0;
+    std::atomic<OperationToken> data_token_ = OperationToken::initial();
+    std::atomic<uint64_t> waiting_count_ = 0;
     static_assert(decltype(data_)::is_always_lock_free);
     static_assert(decltype(data_token_)::is_always_lock_free);
+    static_assert(decltype(waiting_count_)::is_always_lock_free);
 
     std::atomic<void (*)(DataUnion, uint64_t)> callback_ = nullptr;
     std::atomic<uint64_t> callback_context_;
     static_assert(decltype(callback_)::is_always_lock_free);
     static_assert(decltype(callback_context_)::is_always_lock_free);
-};
-
-struct StorageUnit {
-    BasicStorageUnit read_part, write_part;
 };
 
 } // namespace protocol

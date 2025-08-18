@@ -19,7 +19,9 @@ private:
         , index_offset_(index_offset)
         , storage_offset_(storage_offset) {}
 
-    using Datas = DataTuple<data::hand::finger::joint::Position>;
+    using Datas = DataTuple<
+        data::hand::finger::joint::ControlWord, data::hand::finger::joint::Position,
+        data::hand::finger::joint::ControlPosition>;
 
     protocol::Handler& handler_;
     uint16_t index_offset_;

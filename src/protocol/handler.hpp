@@ -38,10 +38,12 @@ public:
 
     virtual ~Handler() { stop_handling_events(); };
 
-    uint32_t data_read_token(int storage_id) { return storage_[storage_id].read_part.data_token(); }
+    OperationToken data_operation_token(int storage_id) {
+        return storage_[storage_id].data_token();
+    }
 
     void read_data_async(uint16_t index, uint8_t sub_index) {
-        std::byte* buffer = fetch_sdo_buffer();
+        std::byte* buffer = fetch_sdo_buffer(sizeof(protocol::sdo::Read));
         new (buffer) protocol::sdo::Read{
             .index = index,
             .sub_index = sub_index,
@@ -50,7 +52,7 @@ public:
 
     template <protocol::is_type_erased_integral T>
     void write_data_async(uint16_t index, uint8_t sub_index, T data) {
-        std::byte* buffer = fetch_sdo_buffer();
+        std::byte* buffer = fetch_sdo_buffer(sizeof(protocol::sdo::Write<T>));
         new (buffer) protocol::sdo::Write<T>{
             .index = index,
             .sub_index = sub_index,
@@ -60,20 +62,20 @@ public:
 
     bool trigger_transmission() { return default_transmit_buffer_.trigger_transmission(); }
 
-    bool wait_reading_data(int storage_id, uint32_t old_token) {
-        return storage_[storage_id].read_part.wait(old_token);
+    OperationToken wait_data_operation(int storage_id, OperationToken old_token) {
+        return storage_[storage_id].wait(old_token);
     }
 
     template <protocol::is_type_erased_integral T>
     T data(int storage_id) {
-        return storage_[storage_id].read_part.read<T>();
+        return storage_[storage_id].read<T>();
     }
 
 private:
-    std::byte* fetch_sdo_buffer() {
+    std::byte* fetch_sdo_buffer(int size) {
         auto buffer = default_transmit_buffer_.try_fetch_buffer(
-            [](int free_size, libusb_transfer* transfer) {
-                if (free_size < (int)(sizeof(protocol::sdo::Read) + sizeof(protocol::CrcCheck)))
+            [size](int free_size, libusb_transfer* transfer) {
+                if (free_size < size + int(sizeof(protocol::CrcCheck)))
                     return false;
 
                 auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
@@ -84,7 +86,7 @@ private:
 
                 return true;
             },
-            [](int) { return sizeof(protocol::sdo::Read); });
+            [size](int) { return size; });
         if (!buffer)
             throw std::runtime_error{"No buffer available!"};
 
@@ -108,19 +110,19 @@ private:
     }
 
     static void transmit_transfer_completed_callback(libusb_transfer* transfer) {
-        std::cout << "Transmitted: ";
-        for (int i = 0; i < transfer->actual_length; i++)
-            std::cout << std::format("{:02X} ", transfer->buffer[i]);
-        std::cout << '\n';
+        // std::cout << "Transmitted: ";
+        // for (int i = 0; i < transfer->actual_length; i++)
+        //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
+        // std::cout << '\n';
         auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
         header.type = 0;
     }
 
     void receive_transfer_completed_callback(libusb_transfer* transfer) {
-        std::cout << "Received:    ";
-        for (int i = 0; i < transfer->actual_length; i++)
-            std::cout << std::format("{:02X} ", transfer->buffer[i]);
-        std::cout << '\n';
+        // std::cout << "Received:    ";
+        // for (int i = 0; i < transfer->actual_length; i++)
+        //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
+        // std::cout << '\n';
 
         auto pointer = reinterpret_cast<std::byte*>(transfer->buffer);
         const auto sentinel = pointer + transfer->actual_length;
@@ -135,9 +137,7 @@ private:
     void read_sdo_frame(std::byte*& pointer, const std::byte* sentinel) {
         while (pointer < sentinel) {
             auto control = static_cast<uint8_t>(*pointer);
-            if (control == 0x33)
-                read_sdo_data_error(pointer);
-            else if (control == 0x35)
+            if (control == 0x35)
                 read_sdo_data_success<uint8_t>(pointer);
             else if (control == 0x37)
                 read_sdo_data_success<uint16_t>(pointer);
@@ -145,20 +145,15 @@ private:
                 read_sdo_data_success<uint32_t>(pointer);
             else if (control == 0x3D)
                 read_sdo_data_success<uint64_t>(pointer);
+            else if (control == 0x33)
+                read_sdo_data_error(pointer);
+            else if (control == 0x21)
+                read_sdo_data_write_success(pointer);
+            else if (control == 0x23)
+                read_sdo_data_write_error(pointer);
             else
                 break;
         }
-    }
-
-    void read_sdo_data_error(std::byte*& pointer) {
-        const auto& data = *reinterpret_cast<protocol::sdo::ReadResultError*>(pointer);
-        pointer += sizeof(data);
-
-        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
-        if (storage_id < 0)
-            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
-
-        storage_[storage_id].read_part.error(data.err_code);
     }
 
     template <typename T>
@@ -170,7 +165,40 @@ private:
         if (storage_id < 0)
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
 
-        storage_[storage_id].read_part.write(data.data);
+        storage_[storage_id].update(data.data);
+    }
+
+    void read_sdo_data_error(std::byte*& pointer) {
+        const auto& data = *reinterpret_cast<protocol::sdo::ReadResultError*>(pointer);
+        pointer += sizeof(data);
+
+        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
+        if (storage_id < 0)
+            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+
+        storage_[storage_id].update(false, data.err_code);
+    }
+
+    void read_sdo_data_write_success(std::byte*& pointer) {
+        const auto& data = *reinterpret_cast<protocol::sdo::WriteResultSuccess*>(pointer);
+        pointer += sizeof(data);
+
+        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
+        if (storage_id < 0)
+            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+
+        storage_[storage_id].update(false, 0);
+    }
+
+    void read_sdo_data_write_error(std::byte*& pointer) {
+        const auto& data = *reinterpret_cast<protocol::sdo::WriteResultError*>(pointer);
+        pointer += sizeof(data);
+
+        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
+        if (storage_id < 0)
+            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+
+        storage_[storage_id].update(false, data.err_code);
     }
 
     AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;

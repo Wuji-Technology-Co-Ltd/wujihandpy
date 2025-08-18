@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "protocol/handler.hpp"
+#include "protocol/storage.hpp"
 
 namespace device {
 
@@ -19,15 +20,16 @@ public:
         iterate_storage<Data>([&](int storage) { storage_id = storage; });
 
         while (true) {
-            uint32_t token = handler().data_read_token(storage_id);
+            auto token = handler().data_operation_token(storage_id);
 
             read_data_async<Data>();
             trigger_transmission();
 
-            if (handler().wait_reading_data(storage_id, token))
+            auto new_token = handler().wait_data_operation(storage_id, token);
+            if (new_token.data_version != token.data_version)
                 break;
             else
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
         };
 
         return data_internal<Data>(storage_id);
@@ -37,15 +39,15 @@ public:
     void read_data() {
         constexpr int count = iterate_count<Data>();
 
-        uint32_t token[count];
+        protocol::OperationToken token[count];
         bool success[count] = {false};
         int success_count = 0;
 
-        while (true) {
-            iterate_storage<Data>([&, i = count](int storage_id) mutable {
-                token[--i] = handler().data_read_token(storage_id);
-            });
+        iterate_storage<Data>([&, i = count](int storage_id) mutable {
+            token[--i] = handler().data_operation_token(storage_id);
+        });
 
+        while (true) {
             iterate_index<Data>([&, i = 0](uint16_t index, uint8_t sub_index) mutable {
                 if (!success[i++])
                     handler().read_data_async(index, sub_index);
@@ -54,8 +56,10 @@ public:
 
             iterate_storage<Data>([&, i = count](int storage_id) mutable {
                 if (!success[--i]) {
-                    success[i] = handler().wait_reading_data(storage_id, token[i]);
+                    auto new_token = handler().wait_data_operation(storage_id, token[i]);
+                    success[i] = (new_token.data_version != token[i].data_version);
                     success_count += success[i];
+                    token[i] = new_token;
                 }
             });
 
@@ -75,20 +79,20 @@ public:
 
     void trigger_transmission() { handler().trigger_transmission(); }
 
-    template <typename Data>
-    requires(std::is_same_v<typename Data::Base, T>) uint32_t data_read_token() {
-        uint32_t token;
-        iterate_storage([&](int storage_id) { token = handler().data_read_token(storage_id); });
-        return token;
-    }
+    // template <typename Data>
+    // requires(std::is_same_v<typename Data::Base, T>) uint32_t data_read_token() {
+    //     uint32_t token;
+    //     iterate_storage([&](int storage_id) { token = handler().data_read_token(storage_id); });
+    //     return token;
+    // }
 
-    template <typename Data>
-    void wait_reading_data() {
-        iterate_storage([&](int storage_id) {
-            uint32_t token = handler().data_read_token(storage_id);
-            handler().wait_reading_data(storage_id, token);
-        });
-    }
+    // template <typename Data>
+    // void wait_reading_data() {
+    //     iterate_storage([&](int storage_id) {
+    //         uint32_t token = handler().data_read_token(storage_id);
+    //         handler().wait_reading_data(storage_id, token);
+    //     });
+    // }
 
     template <typename Data>
     requires(std::is_same_v<typename Data::Base, T>) Data::ValueType data() {
@@ -101,10 +105,70 @@ public:
     void set_data_read_callback();
 
     template <typename Data>
-    void write_data(Data::ValueType value);
+    void write_data(Data::ValueType value) {
+        constexpr int count = iterate_count<Data>();
+
+        protocol::OperationToken token[count];
+        bool success[count] = {false};
+        int success_count = 0;
+
+        iterate_storage<Data>([&, i = count](int storage_id) mutable {
+            token[--i] = handler().data_operation_token(storage_id);
+        });
+
+        while (true) {
+            // Write
+            iterate_index<Data>([&, i = 0](uint16_t index, uint8_t sub_index) mutable {
+                if (!success[i++])
+                    handler().write_data_async(index, sub_index, value);
+            });
+            trigger_transmission();
+
+            iterate_storage<Data>([&, i = count](int storage_id) mutable {
+                if (!success[--i]) {
+                    protocol::OperationToken new_token =
+                        handler().wait_data_operation(storage_id, token[i]);
+                    success[i] = (new_token.err_code == 0);
+                    success_count += success[i];
+                    token[i] = new_token;
+                }
+            });
+
+            if (success_count == count)
+                break;
+            else
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+            // Read
+            iterate_index<Data>([&, i = 0](uint16_t index, uint8_t sub_index) mutable {
+                if (!success[i++])
+                    handler().read_data_async(index, sub_index);
+            });
+            trigger_transmission();
+
+            iterate_storage<Data>([&, i = count](int storage_id) mutable {
+                if (!success[--i]) {
+                    auto new_token = handler().wait_data_operation(storage_id, token[i]);
+                    if (new_token.data_version != token[i].data_version)
+                        success[i] = (value == data_internal<Data>(storage_id));
+                    success_count += success[i];
+                    token[i] = new_token;
+                }
+            });
+
+            if (success_count == count)
+                break;
+            else
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        };
+    }
 
     template <typename Data>
-    void write_data_async(Data::ValueType value);
+    void write_data_async(Data::ValueType value) {
+        iterate_index<Data>([this, value](uint16_t index, uint8_t sub_index) {
+            handler().write_data_async(index, sub_index, value);
+        });
+    }
 
     template <typename Data>
     uint32_t data_wrote_token();

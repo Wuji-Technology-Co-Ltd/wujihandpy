@@ -69,6 +69,25 @@ PACKED_STRUCT(Write {
     T data;
 });
 
+PACKED_STRUCT(WriteResultSuccess {
+    PACKED_STRUCT({
+        uint8_t control;
+        utility::be_uint16_t index;
+        uint8_t sub_index;
+    })
+    header;
+});
+
+PACKED_STRUCT(WriteResultError {
+    PACKED_STRUCT({
+        uint8_t control;
+        utility::be_uint16_t index;
+        uint8_t sub_index;
+    })
+    header;
+    uint32_t err_code;
+});
+
 } // namespace sdo
 
 PACKED_STRUCT(CrcCheck { uint16_t value; });
