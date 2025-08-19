@@ -23,6 +23,8 @@ using InputVoltage = TestData<device::Hand, 0x520A, 10, float>;
 
 namespace finger::joint {
 
+using SinLevel = TestData<device::Joint, 0x05, 8, uint16_t>;
+
 using ControlWord = TestData<device::Joint, 0x40, 0, uint16_t>;
 
 using Position = TestData<device::Joint, 0x64, 0, uint32_t>;

@@ -1,3 +1,3 @@
 #pragma once
 
-#include "data/spinal.hpp" // IWYU pragma: keep
+#include "data/hand.hpp" // IWYU pragma: export

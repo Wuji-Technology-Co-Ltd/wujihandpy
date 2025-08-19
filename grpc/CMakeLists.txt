@@ -15,6 +15,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O3 -Wall -Wextra -Wpedantic)
 endif()
 
+
 find_package(Threads REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
@@ -40,7 +41,6 @@ add_custom_command(
 
 # Include generated *.pb.h files
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
-include_directories("../src")
 
 # hw_grpc_proto
 add_library(hw_grpc_proto
@@ -69,7 +69,8 @@ add_executable(${PROJECT_NAME} ${PROJECT_SOURCE})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
   ${rclcpp_INCLUDE_DIRS}
-  ${type_description_interfaces_INCLUDE_DIRS})
+  ${type_description_interfaces_INCLUDE_DIRS}
+  ${PROJECT_SOURCE_DIR}/../src)
 target_link_libraries(${PROJECT_NAME}
   hw_grpc_proto
   absl::check
