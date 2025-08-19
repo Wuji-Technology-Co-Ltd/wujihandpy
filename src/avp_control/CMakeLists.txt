@@ -70,7 +70,8 @@ add_executable(${PROJECT_NAME} ${PROJECT_SOURCE})
 target_include_directories(${PROJECT_NAME} PRIVATE
   ${rclcpp_INCLUDE_DIRS}
   ${type_description_interfaces_INCLUDE_DIRS}
-  ${PROJECT_SOURCE_DIR}/../src)
+  ${PROJECT_SOURCE_DIR}/../../include
+  ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME}
   hw_grpc_proto
   absl::check
@@ -84,4 +85,5 @@ target_link_libraries(${PROJECT_NAME}
   rclcpp::rclcpp
   tf2::tf2
   tf2_ros::tf2_ros
+  usb-1.0
 )

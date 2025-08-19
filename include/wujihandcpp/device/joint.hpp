@@ -2,10 +2,10 @@
 
 #include <cstdint>
 
-#include "data/hand.hpp"
-#include "device/data_operator.hpp"
-#include "device/data_tuple.hpp"
-#include "protocol/handler.hpp"
+#include "../data/hand.hpp"
+#include "../device/data_operator.hpp"
+#include "../device/data_tuple.hpp"
+#include "../protocol/handler.hpp"
 
 namespace device {
 

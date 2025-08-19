@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(wujihand_test)
+project(wujihand_simple_test)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Set C++ standard to C++20
@@ -59,7 +59,7 @@ add_executable (
   ${PROJECT_SOURCE}
 )
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/../../include)
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
 if(WIN32)

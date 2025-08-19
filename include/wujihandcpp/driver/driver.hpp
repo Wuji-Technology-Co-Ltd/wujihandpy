@@ -7,9 +7,9 @@
 
 #include <libusb.h>
 
-#include "utility/cross_os.hpp"
-#include "utility/final_action.hpp"
-#include "utility/logging.hpp"
+#include "../utility/cross_os.hpp"
+#include "../utility/final_action.hpp"
+#include "../utility/logging.hpp"
 
 namespace driver {
 

@@ -6,8 +6,8 @@
 #include <thread>
 #include <type_traits>
 
-#include "protocol/handler.hpp"
-#include "protocol/storage.hpp"
+#include "../protocol/handler.hpp"
+#include "../protocol/storage.hpp"
 
 namespace device {
 

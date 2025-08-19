@@ -4,10 +4,10 @@
 
 #include <libusb.h>
 
-#include "driver/driver.hpp"
-#include "utility/cross_os.hpp"
-#include "utility/logging.hpp"
-#include "utility/ring_buffer.hpp"
+#include "../driver/driver.hpp"
+#include "../utility/cross_os.hpp"
+#include "../utility/logging.hpp"
+#include "../utility/ring_buffer.hpp"
 
 #pragma once
 

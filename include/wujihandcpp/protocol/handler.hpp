@@ -14,10 +14,10 @@
 
 #include <libusb.h>
 
-#include "driver/async_transmit_buffer.hpp"
-#include "driver/driver.hpp"
-#include "protocol/protocol.hpp"
-#include "protocol/storage.hpp"
+#include "../driver/async_transmit_buffer.hpp"
+#include "../driver/driver.hpp"
+#include "../protocol/protocol.hpp"
+#include "../protocol/storage.hpp"
 
 namespace protocol {
 
