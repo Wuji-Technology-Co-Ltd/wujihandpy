@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace device {
+namespace wujihandcpp::device {
 
 template <typename... Types>
 class DataTuple {
@@ -46,4 +46,4 @@ public:
     }
 };
 
-} // namespace device
+} // namespace wujihandcpp::device

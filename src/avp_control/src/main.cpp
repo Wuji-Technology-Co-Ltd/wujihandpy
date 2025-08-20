@@ -14,6 +14,8 @@
 #include "low_pass_filter.hpp"
 #include "wujihandcpp/utility/fps_counter.hpp"
 
+using namespace wujihandcpp;
+
 class Controller {
 public:
     explicit Controller(const std::string& target)

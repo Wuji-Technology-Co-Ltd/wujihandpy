@@ -3,10 +3,10 @@
 #include <cstdint>
 #include <type_traits>
 
-#include "../utility/cross_os.hpp"
-#include "../utility/endian_promise.hpp"
+#include "wujihandcpp/utility/cross_os.hpp"
+#include "wujihandcpp/utility/endian_promise.hpp"
 
-namespace protocol::protocol {
+namespace wujihandcpp::protocol {
 
 PACKED_STRUCT(Header {
     uint16_t header = 0x55aa;
@@ -102,4 +102,4 @@ PACKED_STRUCT(Write {
 
 PACKED_STRUCT(CrcCheck { uint16_t value; });
 
-} // namespace protocol::protocol
+} // namespace wujihandcpp::protocol

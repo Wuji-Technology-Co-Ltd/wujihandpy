@@ -6,7 +6,7 @@
 #include <bit>
 #include <type_traits>
 
-namespace protocol {
+namespace wujihandcpp::protocol {
 
 struct OperationToken {
     uint16_t token;
@@ -137,4 +137,4 @@ private:
     static_assert(decltype(callback_context_)::is_always_lock_free);
 };
 
-} // namespace protocol
+} // namespace wujihandcpp::protocol

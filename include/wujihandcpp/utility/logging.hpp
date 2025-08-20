@@ -11,12 +11,12 @@
 
 #  include <rclcpp/logger.hpp>
 #  include <rclcpp/logging.hpp>
-namespace utility {
+namespace wujihandcpp::utility {
 inline rclcpp::Logger& get_logger_cached() {
     static rclcpp::Logger logger = rclcpp::get_logger("librmcs");
     return logger;
 }
-} // namespace utility
+} // namespace wujihandcpp::utility
 
 # endif
 #endif

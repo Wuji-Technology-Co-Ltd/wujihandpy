@@ -6,10 +6,10 @@
 #include <thread>
 #include <type_traits>
 
-#include "../protocol/handler.hpp"
-#include "../protocol/storage.hpp"
+#include "wujihandcpp/protocol/handler.hpp"
+#include "wujihandcpp/protocol/storage.hpp"
 
-namespace device {
+namespace wujihandcpp::device {
 
 template <typename T>
 class DataOperator {
@@ -236,4 +236,4 @@ private:
     }
 };
 
-} // namespace device
+} // namespace wujihandcpp::device

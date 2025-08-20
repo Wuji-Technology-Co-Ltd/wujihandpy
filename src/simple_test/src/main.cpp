@@ -8,6 +8,8 @@
 #include <wujihandcpp/device/hand.hpp>
 #include <wujihandcpp/utility/fps_counter.hpp>
 
+using namespace wujihandcpp;
+
 int main() {
     static std::atomic<bool> running = true;
     std::signal(SIGINT, [](int) { running.store(false, std::memory_order::relaxed); });

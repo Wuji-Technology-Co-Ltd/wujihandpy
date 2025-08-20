@@ -2,13 +2,13 @@
 
 #include <cstdint>
 
-#include "../data/hand.hpp"
-#include "../device/data_operator.hpp"
-#include "../device/data_tuple.hpp"
-#include "../device/joint.hpp"
-#include "../protocol/handler.hpp"
+#include "wujihandcpp/data/hand.hpp"
+#include "wujihandcpp/device/data_operator.hpp"
+#include "wujihandcpp/device/data_tuple.hpp"
+#include "wujihandcpp/device/joint.hpp"
+#include "wujihandcpp/protocol/handler.hpp"
 
-namespace device {
+namespace wujihandcpp::device {
 
 class Finger : public DataOperator<Finger> {
     friend class DataOperator;
@@ -53,4 +53,4 @@ private:
     }
 };
 
-} // namespace device
+} // namespace wujihandcpp::device

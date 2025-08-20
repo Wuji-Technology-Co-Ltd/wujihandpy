@@ -194,7 +194,7 @@ private:
         std::make_unique<tf2_ros::TransformBroadcaster>(this)};
     bool ros2_broadcast_;
 
-    utility::FpsCounter fps_counter_;
+    wujihandcpp::utility::FpsCounter fps_counter_;
     std::atomic<bool> running_ = true;
     std::atomic<bool> data_ready_ = false;
     std::jthread streaming_thread_{&HandtrackingClientImpl::stream_hand_updates, this};

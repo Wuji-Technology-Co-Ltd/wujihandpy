@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <atomic>
 
-namespace utility {
+namespace wujihandcpp::utility {
 
 // Lock-free Single-Producer/Single-Consumer (SPSC) ring buffer
 // Inspired by Linux kfifo. Avoids CAS operations for zero-contention.
@@ -188,4 +188,4 @@ private:
     }* storage_;
 };
 
-}; // namespace utility
+}; // namespace wujihandcpp::utility

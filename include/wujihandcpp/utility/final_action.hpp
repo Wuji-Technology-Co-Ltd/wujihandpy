@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace utility {
+namespace wujihandcpp::utility {
 
 template <typename Functor>
 struct FinalAction {
@@ -27,4 +27,4 @@ private:
     Functor action_;
 };
 
-} // namespace utility
+} // namespace wujihandcpp::utility

@@ -14,12 +14,12 @@
 
 #include <libusb.h>
 
-#include "../driver/async_transmit_buffer.hpp"
-#include "../driver/driver.hpp"
-#include "../protocol/protocol.hpp"
-#include "../protocol/storage.hpp"
+#include "wujihandcpp/driver/async_transmit_buffer.hpp"
+#include "wujihandcpp/driver/driver.hpp"
+#include "wujihandcpp/protocol/protocol.hpp"
+#include "wujihandcpp/protocol/storage.hpp"
 
-namespace protocol {
+namespace wujihandcpp::protocol {
 
 class Handler : driver::Driver<Handler> {
     friend class Driver<Handler>;
@@ -243,4 +243,4 @@ private:
     int (*index_to_storage_id_)(uint16_t, uint8_t);
 };
 
-} // namespace protocol
+} // namespace wujihandcpp::protocol

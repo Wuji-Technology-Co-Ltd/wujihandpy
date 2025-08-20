@@ -1,6 +1,6 @@
 #pragma once
 
-namespace utility {
+namespace wujihandcpp::utility {
 
 #ifdef _MSC_VER
 # define PACKED_STRUCT(...) __pragma(pack(push, 1)) struct __VA_ARGS__ __pragma(pack(pop))
@@ -32,4 +32,4 @@ constexpr static inline bool is_windows() {
 # define ALWAYS_INLINE inline
 #endif
 
-} // namespace utility
+} // namespace wujihandcpp::utility

@@ -7,11 +7,11 @@
 
 #include <libusb.h>
 
-#include "../utility/cross_os.hpp"
-#include "../utility/final_action.hpp"
-#include "../utility/logging.hpp"
+#include "wujihandcpp/utility/cross_os.hpp"
+#include "wujihandcpp/utility/final_action.hpp"
+#include "wujihandcpp/utility/logging.hpp"
 
-namespace driver {
+namespace wujihandcpp::driver {
 
 template <typename TransferPrefill>
 concept is_legal_transfer_prefill =
@@ -238,4 +238,4 @@ private:
     bool receive_transfer_busy_ = true;
 };
 
-} // namespace driver
+} // namespace wujihandcpp::driver

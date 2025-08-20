@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <cstring>
 
-#include "../utility/cross_os.hpp"
+#include "wujihandcpp/utility/cross_os.hpp"
 
-namespace data {
+namespace wujihandcpp::data {
 
 constexpr size_t data_length_max = 4;
 
@@ -62,4 +62,4 @@ struct SpecializedData {
     static constexpr bool writable = writable_;
 };
 
-} // namespace data
+} // namespace wujihandcpp::data

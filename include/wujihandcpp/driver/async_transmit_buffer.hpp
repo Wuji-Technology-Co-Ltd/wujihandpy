@@ -4,14 +4,14 @@
 
 #include <libusb.h>
 
-#include "../driver/driver.hpp"
-#include "../utility/cross_os.hpp"
-#include "../utility/logging.hpp"
-#include "../utility/ring_buffer.hpp"
+#include "wujihandcpp/driver/driver.hpp"
+#include "wujihandcpp/utility/cross_os.hpp"
+#include "wujihandcpp/utility/logging.hpp"
+#include "wujihandcpp/utility/ring_buffer.hpp"
 
 #pragma once
 
-namespace driver {
+namespace wujihandcpp::driver {
 
 template <typename Device>
 template <is_legal_transfer_prefill TransferPrefill>
@@ -205,4 +205,4 @@ private:
     bool transfers_all_busy_ = false;
 };
 
-} // namespace driver
+} // namespace wujihandcpp::driver
