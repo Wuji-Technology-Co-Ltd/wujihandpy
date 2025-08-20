@@ -9,10 +9,10 @@
 #include <rclcpp/utilities.hpp>
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/device/hand.hpp>
+#include <wujihandcpp/utility/fps_counter.hpp>
 
 #include "handtracking_client.hpp"
 #include "low_pass_filter.hpp"
-#include "wujihandcpp/utility/fps_counter.hpp"
 
 using namespace wujihandcpp;
 
@@ -31,15 +31,15 @@ public:
         client_.wait_data_ready();
         std::cout << "AVP Stream connected.\n";
 
-        hand_.write_data<data::hand::finger::joint::ControlMode>(4);
+        hand_.write_data<data::joint::ControlMode>(4);
         hand_.write_data<data::hand::GlobalTpdoId>(1);
         hand_.write_data<data::hand::JointPdoInterval>(950);
         hand_.write_data<data::hand::PdoEnabled>(1);
-        hand_.write_data<data::hand::finger::joint::ControlWord>(1);
+        hand_.write_data<data::joint::ControlWord>(1);
 
-        hand_.finger(0).write_data<data::hand::finger::joint::ControlWord>(5);
+        hand_.finger(0).write_data<data::joint::ControlWord>(5);
         for (int i = 1; i < 5; i++)
-            hand_.finger(i).joint(1).write_data<data::hand::finger::joint::ControlWord>(5);
+            hand_.finger(i).joint(1).write_data<data::joint::ControlWord>(5);
 
         using namespace std::chrono_literals;
         constexpr double update_rate = 1000.0;
@@ -56,7 +56,7 @@ public:
             std::this_thread::sleep_until(next_iteration_time);
         }
 
-        hand_.write_data<data::hand::finger::joint::ControlWord>(5);
+        hand_.write_data<data::joint::ControlWord>(5);
         std::cout << "AVP Control exited correctly." << std::endl;
     }
 

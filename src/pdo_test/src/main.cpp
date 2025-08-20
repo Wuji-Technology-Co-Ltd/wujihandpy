@@ -20,18 +20,18 @@ int main() {
     device::Hand hand{0x0483, 0x5740};
 
     // Set control mode & enable whole hand
-    hand.write_data<data::hand::finger::joint::ControlMode>(2);
-    hand.write_data<data::hand::finger::joint::ControlWord>(1);
+    hand.write_data<data::joint::ControlMode>(2);
+    hand.write_data<data::joint::ControlWord>(1);
 
     // Calculate initial control position
-    hand.read_data<data::hand::finger::joint::Position>();
+    hand.read_data<data::joint::Position>();
     double sum = 0;
     for (int i = 1; i < 5; i++)
-        sum += double(hand.finger(i).joint(0).data<data::hand::finger::joint::Position>());
+        sum += double(hand.finger(i).joint(0).data<data::joint::Position>());
     auto initial = static_cast<int32_t>(std::round(sum / 4));
 
     // Return all joints to initial point
-    using ControlPosition = data::hand::finger::joint::ControlPosition;
+    using ControlPosition = data::joint::ControlPosition;
     hand.finger(0).joint(0).write_data<ControlPosition>(0x200000);
     hand.finger(0).joint(1).write_data<ControlPosition>(0x200000);
     hand.finger(0).joint(2).write_data<ControlPosition>(0x200000);
@@ -45,19 +45,19 @@ int main() {
 
     // Wait for joints to move into place
     std::this_thread::sleep_for(500ms);
-    hand.write_data<data::hand::finger::joint::ControlWord>(5);
+    hand.write_data<data::joint::ControlWord>(5);
 
     // Enable CSP & PDO Control
-    hand.write_data<data::hand::finger::joint::ControlMode>(4);
-    hand.write_data<data::hand::finger::joint::ControlWord>(1);
-    hand.write_data<data::hand::PdoEnabled>(1);
+    hand.write_data<data::joint::ControlMode>(4);
     hand.write_data<data::hand::GlobalTpdoId>(1);
     hand.write_data<data::hand::JointPdoInterval>(950);
+    hand.write_data<data::hand::PdoEnabled>(1);
+    hand.write_data<data::joint::ControlWord>(1);
 
     // Disable the whole thumb & each J2
-    hand.finger(0).write_data<data::hand::finger::joint::ControlWord>(5);
+    hand.finger(0).write_data<data::joint::ControlWord>(5);
     for (int i = 1; i < 5; i++)
-        hand.finger(i).joint(1).write_data<data::hand::finger::joint::ControlWord>(5);
+        hand.finger(i).joint(1).write_data<data::joint::ControlWord>(5);
 
     // 1kHz PDO Control
     using namespace std::chrono_literals;
@@ -99,6 +99,6 @@ int main() {
     }
 
     // Disable the entire hand
-    hand.write_data<data::hand::finger::joint::ControlWord>(5);
+    hand.write_data<data::joint::ControlWord>(5);
     std::cout << "Program exited correctly.\n";
 }
