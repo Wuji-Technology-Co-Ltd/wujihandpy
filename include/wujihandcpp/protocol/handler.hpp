@@ -60,6 +60,18 @@ public:
         };
     }
 
+    void write_pdo_async(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
+        std::byte* buffer = fetch_pdo_buffer();
+        auto payload = new (buffer) protocol::pdo::Write{};
+
+        static_assert(sizeof(payload->control_positions) == sizeof(control_positions));
+        payload->pdo_id = 0x100;
+        std::memcpy(&payload->control_positions, &control_positions, sizeof(control_positions));
+        payload->timestamp = timestamp;
+
+        trigger_transmission();
+    }
+
     bool trigger_transmission() { return default_transmit_buffer_.trigger_transmission(); }
 
     OperationToken wait_data_operation(int storage_id, OperationToken old_token) {
@@ -87,6 +99,27 @@ private:
                 return true;
             },
             [size](int) { return size; });
+        if (!buffer)
+            throw std::runtime_error{"No buffer available!"};
+
+        return buffer;
+    }
+
+    std::byte* fetch_pdo_buffer() {
+        auto buffer = default_transmit_buffer_.try_fetch_buffer(
+            [](int free_size, libusb_transfer* transfer) {
+                if (free_size < int(sizeof(protocol::pdo::Write) + sizeof(protocol::CrcCheck)))
+                    return false;
+
+                auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
+                if (header.type == 0)
+                    header.type = 0x11;
+                else if (header.type != 0x11)
+                    return false;
+
+                return true;
+            },
+            [](int) { return sizeof(protocol::pdo::Write); });
         if (!buffer)
             throw std::runtime_error{"No buffer available!"};
 

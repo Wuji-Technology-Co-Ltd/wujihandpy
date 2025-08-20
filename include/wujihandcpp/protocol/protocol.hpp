@@ -90,6 +90,16 @@ PACKED_STRUCT(WriteResultError {
 
 } // namespace sdo
 
+namespace pdo {
+
+PACKED_STRUCT(Write {
+    utility::be_uint16_t pdo_id;
+    int32_t control_positions[5][4];
+    uint32_t timestamp;
+});
+
+}; // namespace pdo
+
 PACKED_STRUCT(CrcCheck { uint16_t value; });
 
 } // namespace protocol::protocol

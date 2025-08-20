@@ -15,6 +15,10 @@ int main() {
     using namespace std::chrono_literals;
     device::Hand hand{0x0483, 0x5740};
 
+    // Set control mode
+    hand.write_data<data::hand::finger::joint::ControlMode>(2);
+
+    // Enable whole hand
     hand.write_data<data::hand::finger::joint::ControlWord>(1);
 
     // Some older firmware require this for enabling.
@@ -23,7 +27,7 @@ int main() {
         hand.write_data<data::hand::finger::joint::SinLevel>(0);
     }
 
-    // Return all joints to zero point
+    // Return all joints to initial point
     hand.finger(0).joint(0).write_data<data::hand::finger::joint::ControlPosition>(0x200000);
     hand.finger(0).joint(1).write_data<data::hand::finger::joint::ControlPosition>(0x200000);
     hand.finger(0).joint(2).write_data<data::hand::finger::joint::ControlPosition>(0x200000);

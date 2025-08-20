@@ -21,10 +21,15 @@ public:
 
     Finger finger(int index) { return sub(index); }
 
+    void write_pdo_async(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
+        handler_.write_pdo_async(control_positions, timestamp);
+    }
+
 private:
     using Datas = DataTuple<
         data::hand::FirmwareVersion, data::hand::FirmwareDate, data::hand::SystemTime,
-        data::hand::McuTemperature, data::hand::InputVoltage>;
+        data::hand::McuTemperature, data::hand::InputVoltage, data::hand::PdoEnabled,
+        data::hand::GlobalTpdoId, data::hand::JointPdoInterval>;
 
     protocol::Handler handler_;
 
