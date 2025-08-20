@@ -17,6 +17,10 @@ int main() {
     using namespace std::chrono_literals;
     device::Hand hand{0x0483, 0x5740};
 
+    // Set control mode & enable whole hand
+    hand.write_data<data::hand::finger::joint::ControlMode>(2);
+    hand.write_data<data::hand::finger::joint::ControlWord>(1);
+
     // Calculate initial control position
     hand.read_data<data::hand::finger::joint::Position>();
     double sum = 0;
@@ -25,8 +29,6 @@ int main() {
     auto initial = static_cast<int32_t>(std::round(sum / 4));
 
     // Return all joints to initial point
-    hand.write_data<data::hand::finger::joint::ControlMode>(2);
-    hand.write_data<data::hand::finger::joint::ControlWord>(1);
     using ControlPosition = data::hand::finger::joint::ControlPosition;
     hand.finger(0).joint(0).write_data<ControlPosition>(0x200000);
     hand.finger(0).joint(1).write_data<ControlPosition>(0x200000);
