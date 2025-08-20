@@ -67,9 +67,11 @@ file(GLOB_RECURSE PROJECT_SOURCE CONFIGURE_DEPENDS
 )
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCE})
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
   ${rclcpp_INCLUDE_DIRS}
   ${type_description_interfaces_INCLUDE_DIRS}
+  "/usr/include/libusb-1.0")
+target_include_directories(${PROJECT_NAME} PRIVATE
   ${PROJECT_SOURCE_DIR}/../../include
   ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME}
