@@ -1,9 +1,13 @@
 #include <cmath>
 
+#include <atomic>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <eigen3/Eigen/Dense>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -18,14 +22,18 @@
 class HandtrackingClient::HandtrackingClientImpl : public rclcpp::Node {
 public:
     explicit HandtrackingClientImpl(
-        HandtrackingClient& outer, const std::shared_ptr<grpc::Channel>& channel,
-        bool ros2_broadcast)
+        const std::shared_ptr<grpc::Channel>& channel, bool ros2_broadcast)
         : Node("handtracking_tf_broadcaster")
-        , outer_(outer)
         , stub_(handtracking::HandTrackingService::NewStub(channel))
-        , tf_broadcaster_(std::make_unique<tf2_ros::TransformBroadcaster>(this))
         , ros2_broadcast_(ros2_broadcast) {}
 
+    ~HandtrackingClientImpl() { running_.store(false, std::memory_order::relaxed); }
+
+    std::atomic<double> joint_angles[5][4];
+
+    void wait_data_ready() { data_ready_.wait(false, std::memory_order::acquire); }
+
+private:
     void stream_hand_updates() {
         handtracking::HandUpdate request;
         grpc::ClientContext context;
@@ -37,17 +45,21 @@ public:
             process_hand_update(response);
             if (ros2_broadcast_)
                 broadcast_hand_update(response);
+            if (!running_.load(std::memory_order::relaxed)) {
+                std::cout << "Stream exited correctly." << std::endl;
+                return;
+            }
         }
 
         grpc::Status status = reader->Finish();
         if (!status.ok()) {
-            std::cerr << "StreamHandUpdates rpc failed: " << status.error_message() << std::endl;
+            throw std::runtime_error{
+                std::format("StreamHandUpdates rpc failed: {}", status.error_message())};
         } else {
             std::cout << "Stream completed successfully." << std::endl;
         }
     }
 
-private:
     void process_hand_update(const handtracking::HandUpdate& update) {
         if (!update.has_right_hand())
             return;
@@ -59,7 +71,8 @@ private:
             return;
         const auto& jointmatrices = right_hand.skeleton().jointmatrices();
         solve_hand_angles(jointmatrices.cbegin());
-        outer_.joint_angles_update_callback(joint_angles_);
+
+        ready_data();
 
         if (fps_counter_.count())
             std::cout << "Handtracking Fps: " << fps_counter_.fps() << '\n';
@@ -69,26 +82,40 @@ private:
         google::protobuf::RepeatedPtrField<handtracking::Matrix4x4>::const_iterator;
 
     void solve_hand_angles(MatrixIterator matrix_iterator) {
-        solve_finger_angles(matrix_iterator + 5, joint_angles_[1]);
-        solve_finger_angles(matrix_iterator + 10, joint_angles_[2]);
-        solve_finger_angles(matrix_iterator + 15, joint_angles_[3]);
-        solve_finger_angles(matrix_iterator + 20, joint_angles_[4]);
+        solve_finger_angles(matrix_iterator + 5, joint_angles[1]);
+        solve_finger_angles(matrix_iterator + 10, joint_angles[2]);
+        solve_finger_angles(matrix_iterator + 15, joint_angles[3]);
+        solve_finger_angles(matrix_iterator + 20, joint_angles[4]);
     }
 
-    static void solve_finger_angles(MatrixIterator matrix_iterator, double (&destination)[4]) {
+    void ready_data() {
+        if (data_ready_.load(std::memory_order::relaxed))
+            return;
+
+        data_ready_.store(true, std::memory_order::release);
+        data_ready_.notify_all();
+    }
+
+    static void
+        solve_finger_angles(MatrixIterator matrix_iterator, std::atomic<double> (&destination)[4]) {
+        double angles[4];
+
         for (int i = 0; i < 4; i++)
-            destination[i] = solve_joint_angle(matrix_iterator[i]);
+            angles[i] = solve_joint_angle(matrix_iterator[i]);
 
         for (int i = 4; i-- > 1;) {
-            destination[i] -= destination[i - 1];
-            if (destination[i] > std::numbers::pi)
-                destination[i] -= 2 * std::numbers::pi;
-            else if (destination[i] < -std::numbers::pi)
-                destination[i] += 2 * std::numbers::pi;
+            angles[i] -= angles[i - 1];
+            if (angles[i] > std::numbers::pi)
+                angles[i] -= 2 * std::numbers::pi;
+            else if (angles[i] < -std::numbers::pi)
+                angles[i] += 2 * std::numbers::pi;
         }
 
-        destination[0] = destination[1];
-        destination[1] = 0;
+        angles[0] = angles[1];
+        angles[1] = 0;
+
+        for (int i = 0; i < 4; i++)
+            destination[i].store(angles[i], std::memory_order::relaxed);
     }
 
     static double solve_joint_angle(const handtracking::Matrix4x4& matrix) {
@@ -161,25 +188,27 @@ private:
 
         tf_broadcaster_->sendTransform(transform);
     }
-
-    HandtrackingClient& outer_;
-
     std::unique_ptr<handtracking::HandTrackingService::Stub> stub_;
 
-    double joint_angles_[5][4];
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_{
+        std::make_unique<tf2_ros::TransformBroadcaster>(this)};
+    bool ros2_broadcast_;
 
     utility::FpsCounter fps_counter_;
-
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-    bool ros2_broadcast_;
+    std::atomic<bool> running_ = true;
+    std::atomic<bool> data_ready_ = false;
+    std::jthread streaming_thread_{&HandtrackingClientImpl::stream_hand_updates, this};
 };
 
 HandtrackingClient::HandtrackingClient(const std::string& target, bool ros2_broadcast) {
     auto channel = grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
-    impl_ = std::make_unique<HandtrackingClient::HandtrackingClientImpl>(
-        *this, channel, ros2_broadcast);
+    impl_ = std::make_unique<HandtrackingClient::HandtrackingClientImpl>(channel, ros2_broadcast);
 };
 
 HandtrackingClient::~HandtrackingClient() = default;
 
-void HandtrackingClient::stream_hand_updates() { impl_->stream_hand_updates(); }
+void HandtrackingClient::wait_data_ready() { impl_->wait_data_ready(); }
+
+auto HandtrackingClient::joint_angles() -> std::atomic<double> (&)[5][4] {
+    return impl_->joint_angles;
+}

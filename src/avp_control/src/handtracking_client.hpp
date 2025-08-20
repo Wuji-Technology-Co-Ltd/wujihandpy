@@ -1,16 +1,14 @@
 #include <memory>
 
-class HandtrackingClient {
+class HandtrackingClient final {
 public:
     explicit HandtrackingClient(const std::string& target, bool ros2_broadcast = true);
 
-    virtual ~HandtrackingClient();
+    ~HandtrackingClient();
 
-    void stream_hand_updates();
+    void wait_data_ready();
 
-    virtual void joint_angles_update_callback(const double (&joint_angles)[5][4]) {
-        (void)joint_angles;
-    }
+    auto joint_angles() -> std::atomic<double> (&)[5][4];
 
 private:
     class HandtrackingClientImpl;
