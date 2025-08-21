@@ -8,6 +8,7 @@
 
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/device/hand.hpp>
+#include <wujihandcpp/device/waitable.hpp>
 #include <wujihandcpp/utility/fps_counter.hpp>
 
 using namespace wujihandcpp;
@@ -31,20 +32,27 @@ int main() {
     auto initial = static_cast<int32_t>(std::round(sum / 4));
 
     // Return all joints to initial point
+
+    device::Waitable waitable;
     using ControlPosition = data::joint::ControlPosition;
-    hand.finger(0).joint(0).write_data<ControlPosition>(0x200000);
-    hand.finger(0).joint(1).write_data<ControlPosition>(0x200000);
-    hand.finger(0).joint(2).write_data<ControlPosition>(0x200000);
-    hand.finger(0).joint(3).write_data<ControlPosition>(0x200000);
+    hand.finger(0).joint(0).write_data_async<ControlPosition>(waitable, 0x200000);
+    hand.finger(0).joint(1).write_data_async<ControlPosition>(waitable, 0x200000);
+    hand.finger(0).joint(2).write_data_async<ControlPosition>(waitable, 0x200000);
+    hand.finger(0).joint(3).write_data_async<ControlPosition>(waitable, 0x200000);
+    hand.finger(1).joint(1).write_data_async<ControlPosition>(waitable, 0xBFFFFF);
+    hand.finger(2).joint(1).write_data_async<ControlPosition>(waitable, 0x900000);
+    hand.finger(3).joint(1).write_data_async<ControlPosition>(waitable, 0x600000);
+    hand.finger(4).joint(1).write_data_async<ControlPosition>(waitable, 0x400000);
     for (int i = 1; i < 5; i++) {
-        hand.finger(i).joint(0).write_data<ControlPosition>(initial);
-        // hand.finger(i).joint(1).write_data<ControlPosition>(0x8FFFFF);
-        hand.finger(i).joint(2).write_data<ControlPosition>(0xFFFFFF - initial);
-        hand.finger(i).joint(3).write_data<ControlPosition>(0xFFFFFF - initial);
+        hand.finger(i).joint(0).write_data_async<ControlPosition>(waitable, initial);
+        hand.finger(i).joint(2).write_data_async<ControlPosition>(waitable, 0xFFFFFF - initial);
+        hand.finger(i).joint(3).write_data_async<ControlPosition>(waitable, 0xFFFFFF - initial);
     }
+    hand.trigger_transmission();
+    waitable.wait();
 
     // Wait for joints to move into place
-    std::this_thread::sleep_for(500ms);
+    std::this_thread::sleep_for(100ms);
     hand.write_data<data::joint::ControlWord>(5);
 
     // Enable CSP & PDO Control
@@ -92,7 +100,7 @@ int main() {
         }
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - begin);
-        hand.write_pdo_async(control_positions, static_cast<uint32_t>(duration.count()));
+        hand.pdo_write_async_unchecked(control_positions, static_cast<uint32_t>(duration.count()));
 
         next_iteration_time += update_period;
         std::this_thread::sleep_until(next_iteration_time);

@@ -6,18 +6,15 @@
 
 #include <atomic>
 #include <bit>
-#include <format>
-#include <functional>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <thread>
-
-#include <libusb.h>
+#include <type_traits>
 
 #include "wujihandcpp/driver/async_transmit_buffer.hpp"
 #include "wujihandcpp/driver/driver.hpp"
 #include "wujihandcpp/protocol/protocol.hpp"
-#include "wujihandcpp/protocol/storage.hpp"
 
 namespace wujihandcpp::protocol {
 
@@ -26,11 +23,30 @@ class Handler : driver::Driver<Handler> {
     friend class AsyncTransmitBuffer<protocol::Header>;
 
 public:
+    struct Buffer8 {
+        Buffer8() = default;
+
+        template <typename T>
+        explicit Buffer8(const T& value) {
+            static_assert(sizeof(T) <= 8);
+            new (storage) std::remove_cvref_t<T>{value};
+        };
+
+        template <typename T>
+        std::remove_cvref_t<T>& as() {
+            return *reinterpret_cast<std::remove_cvref_t<T>*>(storage);
+        }
+
+        alignas(8) std::byte storage[8];
+        static_assert(sizeof(void*) == 8);
+    };
+
     explicit Handler(
         uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count,
         int (*index_to_storage_id)(uint16_t, uint8_t))
         : Driver(usb_vid, usb_pid)
         , default_transmit_buffer_(*this, buffer_transfer_count)
+        , event_thread_transmit_buffer_(*this, buffer_transfer_count, std::chrono::milliseconds(1))
         , event_thread_([this]() { handle_events(); })
         , sync_read_thread_id_(std::this_thread::get_id())
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
@@ -38,54 +54,96 @@ public:
 
     virtual ~Handler() { stop_handling_events(); };
 
-    OperationToken data_operation_token(int storage_id) {
-        return storage_[storage_id].data_token();
+    void read_data_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id) {
+        if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
+            != OperatingState::NONE)
+            return;
+
+        read_data_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
     }
 
-    void read_data_async(uint16_t index, uint8_t sub_index) {
-        std::byte* buffer = fetch_sdo_buffer(sizeof(protocol::sdo::Read));
-        new (buffer) protocol::sdo::Read{
-            .index = index,
-            .sub_index = sub_index,
-        };
+    void read_data_async(
+        uint16_t index, uint8_t sub_index, int storage_id,
+        void (*callback)(Buffer8 context, Buffer8 data), Buffer8 callback_context) {
+        if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
+            != OperatingState::NONE)
+            throw std::runtime_error("Illegal checked read: Data is being operated!");
+
+        storage_[storage_id].callback.store(callback, std::memory_order::relaxed);
+        storage_[storage_id].callback_context.store(callback_context, std::memory_order::relaxed);
+        storage_[storage_id].operating_state.store(
+            OperatingState::READING, std::memory_order::release);
+
+        read_data_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
     }
 
-    template <protocol::is_type_erased_integral T>
-    void write_data_async(uint16_t index, uint8_t sub_index, T data) {
-        std::byte* buffer = fetch_sdo_buffer(sizeof(protocol::sdo::Write<T>));
-        new (buffer) protocol::sdo::Write<T>{
-            .index = index,
-            .sub_index = sub_index,
-            .data = data,
-        };
+    template <size_t data_size>
+    void write_data_async_unchecked(
+        Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id) {
+        if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
+            != OperatingState::NONE)
+            return;
+
+        using T = SizeToUIntType<data_size>;
+        write_data_async_unchecked_internal(
+            default_transmit_buffer_, data.as<T>(), index, sub_index);
     }
 
-    void write_pdo_async(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
-        std::byte* buffer = fetch_pdo_buffer();
+    template <size_t data_size>
+    void write_data_async(
+        Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id,
+        void (*callback)(Buffer8 context, Buffer8 data), Buffer8 callback_context) {
+        if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
+            != OperatingState::NONE)
+            throw std::runtime_error("Illegal checked write: Data is being operated!");
+
+        storage_[storage_id].data.store(data, std::memory_order::relaxed);
+        storage_[storage_id].callback.store(callback, std::memory_order::relaxed);
+        storage_[storage_id].callback_context.store(callback_context, std::memory_order::relaxed);
+        storage_[storage_id].operating_state.store(
+            OperatingState::WRITING, std::memory_order::release);
+
+        using T = SizeToUIntType<data_size>;
+        write_data_async_unchecked_internal(
+            default_transmit_buffer_, data.as<T>(), index, sub_index);
+    }
+
+    void pdo_write_async_unchecked(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
+        std::byte* buffer = fetch_pdo_buffer(default_transmit_buffer_);
         auto payload = new (buffer) protocol::pdo::Write{};
 
         static_assert(sizeof(payload->control_positions) == sizeof(control_positions));
         payload->pdo_id = 0x100;
         std::memcpy(&payload->control_positions, &control_positions, sizeof(control_positions));
         payload->timestamp = timestamp;
-
-        trigger_transmission();
     }
 
     bool trigger_transmission() { return default_transmit_buffer_.trigger_transmission(); }
 
-    OperationToken wait_data_operation(int storage_id, OperationToken old_token) {
-        return storage_[storage_id].wait(old_token);
-    }
-
-    template <protocol::is_type_erased_integral T>
-    T data(int storage_id) {
-        return storage_[storage_id].read<T>();
+    Buffer8 data(int storage_id) {
+        return storage_[storage_id].data.load(std::memory_order::relaxed);
     }
 
 private:
-    std::byte* fetch_sdo_buffer(int size) {
-        auto buffer = default_transmit_buffer_.try_fetch_buffer(
+    enum class OperatingState : uint32_t {
+        NONE = 0,
+
+        READING = 2,
+
+        WRITING = 4,
+        WRITING_CONFIRMING = 5,
+    };
+    struct StorageUnit {
+        std::atomic<Buffer8> data;
+        std::atomic<uint32_t> data_version = 0;
+        std::atomic<OperatingState> operating_state;
+        std::atomic<void (*)(Buffer8 context, Buffer8 data)> callback;
+        std::atomic<Buffer8> callback_context;
+    };
+
+    static std::byte*
+        fetch_sdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer, int size) {
+        auto buffer = transmit_buffer.try_fetch_buffer(
             [size](int free_size, libusb_transfer* transfer) {
                 if (free_size < size + int(sizeof(protocol::CrcCheck)))
                     return false;
@@ -105,8 +163,8 @@ private:
         return buffer;
     }
 
-    std::byte* fetch_pdo_buffer() {
-        auto buffer = default_transmit_buffer_.try_fetch_buffer(
+    static std::byte* fetch_pdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer) {
+        auto buffer = transmit_buffer.try_fetch_buffer(
             [](int free_size, libusb_transfer* transfer) {
                 if (free_size < int(sizeof(protocol::pdo::Write) + sizeof(protocol::CrcCheck)))
                     return false;
@@ -143,7 +201,10 @@ private:
     }
 
     static void transmit_transfer_completed_callback(libusb_transfer* transfer) {
-        // std::cout << "Transmitted: ";
+        // std::cout << std::format(
+        //     "[{:.3f}] Tx: ", std::chrono::duration<double, std::milli>(
+        //                          std::chrono::steady_clock::now().time_since_epoch())
+        //                          .count());
         // for (int i = 0; i < transfer->actual_length; i++)
         //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
         // std::cout << '\n';
@@ -152,7 +213,10 @@ private:
     }
 
     void receive_transfer_completed_callback(libusb_transfer* transfer) {
-        // std::cout << "Received:    ";
+        // std::cout << std::format(
+        //     "[{:.3f}] Rx: ", std::chrono::duration<double, std::milli>(
+        //                          std::chrono::steady_clock::now().time_since_epoch())
+        //                          .count());
         // for (int i = 0; i < transfer->actual_length; i++)
         //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
         // std::cout << '\n';
@@ -165,6 +229,8 @@ private:
 
         if (header.type == 0x21)
             read_sdo_frame(pointer, sentinel);
+
+        event_thread_transmit_buffer_.trigger_transmission();
     }
 
     void read_sdo_frame(std::byte*& pointer, const std::byte* sentinel) {
@@ -195,10 +261,34 @@ private:
         pointer += sizeof(data);
 
         int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
-        if (storage_id < 0)
+        if (storage_id < 0) [[unlikely]]
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+        auto& storage = storage_[storage_id];
 
-        storage_[storage_id].update(data.data);
+        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
+        if (operating_state != OperatingState::NONE) {
+            if (operating_state == OperatingState::READING) {
+                complete_operation(storage, Buffer8{data.data});
+            } else if (operating_state == OperatingState::WRITING_CONFIRMING) {
+                if (data.data == storage.data.load(std::memory_order::relaxed).as<T>())
+                    complete_operation(storage);
+                else {
+                    storage.operating_state.store(
+                        OperatingState::WRITING, std::memory_order::relaxed);
+                    write_data_async_unchecked_internal(
+                        event_thread_transmit_buffer_,
+                        storage.data.load(std::memory_order::relaxed).as<T>(), data.header.index,
+                        data.header.sub_index);
+                }
+                return;
+            }
+        }
+
+        storage.data.store(Buffer8{data.data}, std::memory_order::relaxed);
+        auto new_version = storage.data_version.load(std::memory_order::relaxed) + 1;
+        if (new_version == 0)
+            new_version = 1;
+        storage.data_version.store(new_version, std::memory_order::release);
     }
 
     void read_sdo_data_error(std::byte*& pointer) {
@@ -208,8 +298,15 @@ private:
         int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
         if (storage_id < 0)
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+        auto& storage = storage_[storage_id];
 
-        storage_[storage_id].update(false, data.err_code);
+        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
+        if (operating_state != OperatingState::NONE) {
+            if (operating_state == OperatingState::READING
+                || operating_state == OperatingState::WRITING_CONFIRMING)
+                read_data_async_unchecked_internal(
+                    event_thread_transmit_buffer_, data.header.index, data.header.sub_index);
+        }
     }
 
     void read_sdo_data_write_success(std::byte*& pointer) {
@@ -219,8 +316,13 @@ private:
         int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
         if (storage_id < 0)
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+        auto& storage = storage_[storage_id];
 
-        storage_[storage_id].update(false, 0);
+        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
+        if (operating_state != OperatingState::NONE) {
+            if (operating_state == OperatingState::WRITING)
+                complete_operation(storage);
+        }
     }
 
     void read_sdo_data_write_error(std::byte*& pointer) {
@@ -230,11 +332,57 @@ private:
         int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
         if (storage_id < 0)
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+        auto& storage = storage_[storage_id];
 
-        storage_[storage_id].update(false, data.err_code);
+        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
+        if (operating_state != OperatingState::NONE) {
+            if (operating_state == OperatingState::WRITING) {
+                storage.operating_state.store(
+                    OperatingState::WRITING_CONFIRMING, std::memory_order::relaxed);
+                read_data_async_unchecked_internal(
+                    event_thread_transmit_buffer_, data.header.index, data.header.sub_index);
+            }
+        }
     }
 
+    static void read_data_async_unchecked_internal(
+        AsyncTransmitBuffer<protocol::Header>& transmit_buffer, uint16_t index, uint8_t sub_index) {
+        std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Read));
+        new (buffer) protocol::sdo::Read{
+            .index = index,
+            .sub_index = sub_index,
+        };
+    }
+
+    template <protocol::is_type_erased_integral T>
+    void write_data_async_unchecked_internal(
+        AsyncTransmitBuffer<protocol::Header>& transmit_buffer, T data, uint16_t index,
+        uint8_t sub_index) {
+
+        std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Write<T>));
+        new (buffer) protocol::sdo::Write<T>{
+            .index = index,
+            .sub_index = sub_index,
+            .data = data,
+        };
+    }
+
+    static void complete_operation(StorageUnit& storage, Buffer8 value = {}) {
+        storage.operating_state.store(OperatingState::NONE, std::memory_order::release);
+        if (auto callback = storage.callback.load(std::memory_order::relaxed))
+            callback(storage.callback_context.load(std::memory_order::relaxed), value);
+    }
+
+    template <size_t size>
+    using SizeToUIntType = std::conditional_t<
+        size == 1, uint8_t,
+        std::conditional_t<
+            size == 2, uint16_t,
+            std::conditional_t<
+                size == 4, uint32_t, std::conditional_t<size == 8, uint64_t, void>>>>;
+
     AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;
+    AsyncTransmitBuffer<protocol::Header> event_thread_transmit_buffer_;
     std::jthread event_thread_;
 
     const std::thread::id sync_read_thread_id_;

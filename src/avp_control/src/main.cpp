@@ -20,7 +20,7 @@ class Controller {
 public:
     explicit Controller(const std::string& target)
         : hand_{0x0483, 0x5740}
-        , client_(target, false) {
+        , client_(target) {
         control_positions_[0][0] = 0x200000;
         control_positions_[0][1] = 0x200000;
         control_positions_[0][2] = 0x200000;
@@ -78,7 +78,8 @@ private:
         }
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - begin_time_);
-        hand_.write_pdo_async(control_positions_, static_cast<uint32_t>(duration.count()));
+        hand_.pdo_write_async_unchecked(
+            control_positions_, static_cast<uint32_t>(duration.count()));
     }
 
     void update_filter() {

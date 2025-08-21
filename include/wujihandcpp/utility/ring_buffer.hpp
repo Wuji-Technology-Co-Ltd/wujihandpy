@@ -100,6 +100,7 @@ public:
 
         std::atomic_signal_fence(std::memory_order::release);
         in_.store(in + count, std::memory_order::release);
+        in_.notify_one();
 
         return count;
     }
@@ -107,7 +108,7 @@ public:
     template <typename... Args>
     bool emplace_back(Args&&... args) {
         return emplace_back_multi(
-            [&](std::byte* storage) { new (storage) T{std::forward<Args...>(args...)}; }, 1);
+            [&](std::byte* storage) { new (storage) T{std::forward<Args>(args)...}; }, 1);
     }
 
     template <typename F>
@@ -121,6 +122,16 @@ public:
     bool push_back(T&& value) {
         return emplace_back_multi(
             [&](std::byte* storage) { new (storage) T{std::move(value)}; }, 1);
+    }
+
+    void wait_data() {
+        auto out = out_.load(std::memory_order_relaxed);
+        auto in = in_.load(std::memory_order_acquire);
+
+        if (in != out)
+            return;
+
+        in_.wait(in, std::memory_order_acquire);
     }
 
     template <typename F>
