@@ -13,17 +13,17 @@ class Joint;
 }; // namespace device
 
 namespace data::hand {
-using FirmwareVersion = TestData<device::Hand, 0x5201, 1, uint32_t>;
-using FirmwareDate = TestData<device::Hand, 0x5201, 2, uint32_t>;
+struct FirmwareVersion : RemoteData<device::Hand, 0x5201, 1, uint32_t> {};
+struct FirmwareDate : RemoteData<device::Hand, 0x5201, 2, uint32_t> {};
 
-using SystemTime = TestData<device::Hand, 0x520A, 1, uint32_t>;
-using McuTemperature = TestData<device::Hand, 0x520A, 9, float>;
-using InputVoltage = TestData<device::Hand, 0x520A, 10, float>;
+struct SystemTime : RemoteData<device::Hand, 0x520A, 1, uint32_t> {};
+struct McuTemperature : RemoteData<device::Hand, 0x520A, 9, float> {};
+struct InputVoltage : RemoteData<device::Hand, 0x520A, 10, float> {};
 
-using PdoEnabled = TestData<device::Hand, 0x52A0, 5, uint8_t>;
+struct PdoEnabled : RemoteData<device::Hand, 0x52A0, 5, uint8_t> {};
 
-using GlobalTpdoId = TestData<device::Hand, 0x52A4, 2, uint16_t>;
-using JointPdoInterval = TestData<device::Hand, 0x52A4, 5, uint32_t>;
+struct GlobalTpdoId : RemoteData<device::Hand, 0x52A4, 2, uint16_t> {};
+struct JointPdoInterval : RemoteData<device::Hand, 0x52A4, 5, uint32_t> {};
 } // namespace data::hand
 
 } // namespace wujihandcpp

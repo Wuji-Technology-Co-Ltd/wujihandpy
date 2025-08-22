@@ -16,7 +16,7 @@ class DataOperator {
 
 public:
     template <typename Data>
-    requires(std::is_same_v<typename Data::Base, T>) Data::ValueType read_data() {
+    requires(std::is_same_v<typename Data::Base, T>) Data::ValueType read() {
         read<Data>();
         return get<Data>();
     }
