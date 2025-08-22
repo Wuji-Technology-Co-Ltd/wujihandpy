@@ -7,9 +7,9 @@
 
 #include <libusb.h>
 
-#include "wujihandcpp/utility/cross_os.hpp"
-#include "wujihandcpp/utility/final_action.hpp"
-#include "wujihandcpp/utility/logging.hpp"
+#include "utility/cross_os.hpp"
+#include "utility/final_action.hpp"
+#include "utility/logging.hpp"
 
 namespace wujihandcpp::driver {
 
@@ -29,7 +29,7 @@ public:
         }
     }
 
-    virtual ~Driver() {
+    ~Driver() {
         libusb_free_transfer(libusb_receive_transfer_);
         libusb_release_interface(libusb_device_handle_, target_interface_);
         libusb_close(libusb_device_handle_);

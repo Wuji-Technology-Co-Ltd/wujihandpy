@@ -5,10 +5,10 @@
 
 #include <libusb.h>
 
-#include "wujihandcpp/driver/driver.hpp"
-#include "wujihandcpp/utility/cross_os.hpp"
-#include "wujihandcpp/utility/logging.hpp"
-#include "wujihandcpp/utility/ring_buffer.hpp"
+#include "driver/driver.hpp"
+#include "utility/cross_os.hpp"
+#include "utility/logging.hpp"
+#include "utility/ring_buffer.hpp"
 
 #pragma once
 

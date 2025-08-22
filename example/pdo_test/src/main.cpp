@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstdint>
 #include <thread>
+#include <iostream>
 
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/device/hand.hpp>

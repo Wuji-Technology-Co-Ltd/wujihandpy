@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <type_traits>
 
-#include "wujihandcpp/utility/cross_os.hpp"
-#include "wujihandcpp/utility/endian_promise.hpp"
+#include "utility/cross_os.hpp"
+#include "utility/endian_promise.hpp"
 
 namespace wujihandcpp::protocol {
 

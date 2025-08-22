@@ -89,3 +89,6 @@ target_link_libraries(${PROJECT_NAME}
   tf2_ros::tf2_ros
   usb-1.0
 )
+
+target_link_directories(${PROJECT_NAME} PRIVATE /workspaces/wujihand_test/build)
+target_link_libraries(${PROJECT_NAME} wujihandcpp)

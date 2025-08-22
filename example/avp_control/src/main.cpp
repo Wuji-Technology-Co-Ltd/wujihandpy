@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <numbers>
+#include <iostream>
 
 #include <rclcpp/utilities.hpp>
 #include <wujihandcpp/data/hand.hpp>

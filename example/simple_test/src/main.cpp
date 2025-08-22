@@ -2,6 +2,7 @@
 #include <csignal>
 
 #include <atomic>
+#include <iostream>
 #include <thread>
 
 #include <wujihandcpp/data/hand.hpp>

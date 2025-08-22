@@ -9,21 +9,11 @@ public:
     template <typename T>
     friend class DataOperator;
 
-    void wait() {
-        int current = waiting_count_.load(std::memory_order_acquire);
-        while (current != 0) {
-            waiting_count_.wait(current, std::memory_order_acquire);
-            current = waiting_count_.load(std::memory_order_acquire);
-        }
-    }
+    void wait();
 
 private:
-    void count_up() { waiting_count_.fetch_add(1, std::memory_order_relaxed); }
-    void count_down() {
-        auto old = waiting_count_.fetch_sub(1, std::memory_order_release);
-        if (old - 1 == 0)
-            waiting_count_.notify_one();
-    }
+    void count_up();
+    void count_down();
 
     std::atomic<int> waiting_count_ = 0;
 };

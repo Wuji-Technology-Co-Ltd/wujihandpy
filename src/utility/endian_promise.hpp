@@ -5,7 +5,7 @@
 #include <iostream>
 #include <type_traits>
 
-#include "wujihandcpp/utility/cross_os.hpp"
+#include "utility/cross_os.hpp"
 
 namespace wujihandcpp::utility {
 
