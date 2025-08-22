@@ -4,7 +4,7 @@
 
 #include <type_traits>
 
-#include "wujihandcpp/device/waitable.hpp"
+#include "wujihandcpp/device/latch.hpp"
 #include "wujihandcpp/protocol/handler.hpp"
 
 namespace wujihandcpp::device {
@@ -17,28 +17,28 @@ class DataOperator {
 public:
     template <typename Data>
     requires(std::is_same_v<typename Data::Base, T>) Data::ValueType read_data() {
-        read_data<Data>();
-        return data<Data>();
+        read<Data>();
+        return get<Data>();
     }
 
     template <typename Data>
-    void read_data() {
-        Waitable waitable;
-        read_data_async<Data>(waitable);
+    void read() {
+        Latch latch;
+        read_async<Data>(latch);
         trigger_transmission();
-        waitable.wait();
+        latch.wait();
     }
 
     template <typename Data>
-    void read_data_async(Waitable& waitable) {
+    void read_async(Latch& latch) {
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
-            waitable.acquire();
+            latch.count_up();
 
-            Buffer8 callback_context{&waitable};
-            handler.read_data_async(
+            Buffer8 callback_context{&latch};
+            handler.read_async(
                 index, sub_index, storage_id,
-                [](Buffer8 context, Buffer8) { (context.as<Waitable*>())->release(); },
+                [](Buffer8 context, Buffer8) { (context.as<Latch*>())->count_down(); },
                 callback_context);
         });
     }
@@ -48,11 +48,11 @@ public:
         sizeof(F) <= 8 && alignof(F) <= 8
         && std::is_trivially_copyable_v<F> && std::is_trivially_destructible_v<F>
         && requires(Data::ValueType value, const F& f) { f(value); })
-    void read_data_async(const F& f) {
+    void read_async(const F& f) {
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
             Buffer8 callback_context{f};
-            handler.read_data_async(
+            handler.read_async(
                 index, sub_index, storage_id,
                 [](Buffer8 context, Buffer8 value) {
                     context.as<F>()(value.as<typename Data::ValueType>());
@@ -65,41 +65,41 @@ public:
     void set_data_read_callback(); // TODO
 
     template <typename Data>
-    void read_data_async_unchecked() {
+    void read_async_unchecked() {
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&handler](uint16_t index, uint8_t sub_index, int storage_id) {
-            handler.read_data_async_unchecked(index, sub_index, storage_id);
+            handler.read_async_unchecked(index, sub_index, storage_id);
         });
     }
 
     template <typename Data>
-    requires(std::is_same_v<typename Data::Base, T>) Data::ValueType data() {
+    requires(std::is_same_v<typename Data::Base, T>) Data::ValueType get() {
         Handler& handler = static_cast<T*>(this)->handler_;
         typename Data::ValueType value;
         iterate<Data>([&](uint16_t, uint8_t, int storage_id) {
-            value = handler.data(storage_id).as<typename Data::ValueType>();
+            value = handler.get(storage_id).as<typename Data::ValueType>();
         });
         return value;
     }
 
     template <typename Data>
-    void write_data(Data::ValueType value) {
-        Waitable waitable;
-        write_data_async<Data>(waitable, value);
+    void write(Data::ValueType value) {
+        Latch latch;
+        write_async<Data>(latch, value);
         trigger_transmission();
-        waitable.wait();
+        latch.wait();
     }
 
     template <typename Data>
-    void write_data_async(Waitable& waitable, Data::ValueType value) {
+    void write_async(Latch& latch, Data::ValueType value) {
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
-            waitable.acquire();
+            latch.count_up();
 
-            Buffer8 callback_context{&waitable};
-            handler.write_data_async<sizeof(value)>(
+            Buffer8 callback_context{&latch};
+            handler.write_async<sizeof(value)>(
                 Buffer8{value}, index, sub_index, storage_id,
-                [](Buffer8 context, Buffer8) { (context.as<Waitable*>())->release(); },
+                [](Buffer8 context, Buffer8) { (context.as<Latch*>())->count_down(); },
                 callback_context);
         });
     }
@@ -108,21 +108,21 @@ public:
     requires(
         sizeof(F) <= 8 && alignof(F) <= 8 && std::is_trivially_copyable_v<F>
         && std::is_trivially_destructible_v<F> && requires(const F& f) { f(); })
-    void write_data_async(const F& f, Data::ValueType value) {
+    void write_async(const F& f, Data::ValueType value) {
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
             Buffer8 callback_context{f};
-            handler.write_data_async<sizeof(value)>(
+            handler.write_async<sizeof(value)>(
                 Buffer8{value}, index, sub_index, storage_id,
                 [](Buffer8 context, Buffer8) { context.as<F>()(); }, callback_context);
         });
     }
 
     template <typename Data>
-    void write_data_async_unchecked(Data::ValueType value) {
+    void write_async_unchecked(Data::ValueType value) {
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
-            handler.write_data_async_unchecked<sizeof(value)>(
+            handler.write_async_unchecked<sizeof(value)>(
                 Buffer8{value}, index, sub_index, storage_id);
         });
     }

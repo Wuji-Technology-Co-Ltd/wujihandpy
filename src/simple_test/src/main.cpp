@@ -6,7 +6,7 @@
 
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/device/hand.hpp>
-#include <wujihandcpp/device/waitable.hpp>
+#include <wujihandcpp/device/latch.hpp>
 #include <wujihandcpp/utility/fps_counter.hpp>
 
 using namespace wujihandcpp;
@@ -19,41 +19,41 @@ int main() {
     device::Hand hand{0x0483, 0x5740};
 
     // Set control mode
-    hand.write_data<data::joint::ControlMode>(2);
+    hand.write<data::joint::ControlMode>(2);
 
     // Enable whole hand
-    hand.write_data<data::joint::ControlWord>(1);
+    hand.write<data::joint::ControlWord>(1);
 
     // Some older firmware require this for enabling.
     if (false) {
-        hand.write_data<data::joint::SinLevel>(5);
-        hand.write_data<data::joint::SinLevel>(0);
+        hand.write<data::joint::SinLevel>(5);
+        hand.write<data::joint::SinLevel>(0);
     }
 
     // Return all joints to initial point
-    device::Waitable waitable;
+    device::Latch latch;
     using ControlPosition = data::joint::ControlPosition;
-    hand.finger(0).joint(0).write_data_async<ControlPosition>(waitable, 0x200000);
-    hand.finger(0).joint(1).write_data_async<ControlPosition>(waitable, 0x200000);
-    hand.finger(0).joint(2).write_data_async<ControlPosition>(waitable, 0x200000);
-    hand.finger(0).joint(3).write_data_async<ControlPosition>(waitable, 0x200000);
-    hand.finger(1).joint(1).write_data_async<ControlPosition>(waitable, 0xBFFFFF);
-    hand.finger(2).joint(1).write_data_async<ControlPosition>(waitable, 0x900000);
-    hand.finger(3).joint(1).write_data_async<ControlPosition>(waitable, 0x600000);
-    hand.finger(4).joint(1).write_data_async<ControlPosition>(waitable, 0x400000);
+    hand.finger(0).joint(0).write_async<ControlPosition>(latch, 0x200000);
+    hand.finger(0).joint(1).write_async<ControlPosition>(latch, 0x200000);
+    hand.finger(0).joint(2).write_async<ControlPosition>(latch, 0x200000);
+    hand.finger(0).joint(3).write_async<ControlPosition>(latch, 0x200000);
+    hand.finger(1).joint(1).write_async<ControlPosition>(latch, 0xBFFFFF);
+    hand.finger(2).joint(1).write_async<ControlPosition>(latch, 0x900000);
+    hand.finger(3).joint(1).write_async<ControlPosition>(latch, 0x600000);
+    hand.finger(4).joint(1).write_async<ControlPosition>(latch, 0x400000);
     for (int i = 1; i < 5; i++) {
-        hand.finger(i).joint(0).write_data_async<ControlPosition>(waitable, 0xFFFFFF);
-        hand.finger(i).joint(2).write_data_async<ControlPosition>(waitable, 0x000000);
-        hand.finger(i).joint(3).write_data_async<ControlPosition>(waitable, 0x000000);
+        hand.finger(i).joint(0).write_async<ControlPosition>(latch, 0xFFFFFF);
+        hand.finger(i).joint(2).write_async<ControlPosition>(latch, 0x000000);
+        hand.finger(i).joint(3).write_async<ControlPosition>(latch, 0x000000);
     }
     hand.trigger_transmission();
-    waitable.wait();
+    latch.wait();
 
     // Wait for joints to move into place
     std::this_thread::sleep_for(500ms);
 
     // Disable the thumb
-    hand.finger(0).write_data<data::joint::ControlWord>(5);
+    hand.finger(0).write<data::joint::ControlWord>(5);
 
     // 1kHz SDO Control
     using namespace std::chrono_literals;
@@ -70,13 +70,11 @@ int main() {
 
         x += 0.005;
         double y = (std::cos(x) + 1) / 2;
-        uint32_t position = static_cast<uint32_t>(std::round(double(0xFFFFFF) * y));
+        auto position = static_cast<int32_t>(std::round(double(0xFFFFFF) * y));
         for (int i = 1; i < 5; i++) {
-            hand.finger(i).joint(0).write_data_async_unchecked<ControlPosition>(position);
-            hand.finger(i).joint(2).write_data_async_unchecked<ControlPosition>(
-                0xFFFFFF - position);
-            hand.finger(i).joint(3).write_data_async_unchecked<ControlPosition>(
-                0xFFFFFF - position);
+            hand.finger(i).joint(0).write_async_unchecked<ControlPosition>(position);
+            hand.finger(i).joint(2).write_async_unchecked<ControlPosition>(0xFFFFFF - position);
+            hand.finger(i).joint(3).write_async_unchecked<ControlPosition>(0xFFFFFF - position);
         }
         hand.trigger_transmission();
 
@@ -85,6 +83,6 @@ int main() {
     }
 
     // Disable the entire hand
-    hand.write_data<data::joint::ControlWord>(5);
+    hand.write<data::joint::ControlWord>(5);
     std::cout << "Program exited correctly.\n";
 }

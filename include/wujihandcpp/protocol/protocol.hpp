@@ -39,7 +39,7 @@ PACKED_STRUCT(ReadResultSuccess {
         uint8_t sub_index;
     })
     header;
-    T data;
+    T value;
 });
 
 PACKED_STRUCT(ReadResultError {
@@ -66,7 +66,7 @@ PACKED_STRUCT(Write {
     }();
     utility::be_uint16_t index;
     uint8_t sub_index;
-    T data;
+    T value;
 });
 
 PACKED_STRUCT(WriteResultSuccess {

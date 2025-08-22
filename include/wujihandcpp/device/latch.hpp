@@ -4,7 +4,7 @@
 
 namespace wujihandcpp::device {
 
-class Waitable {
+class Latch {
 public:
     template <typename T>
     friend class DataOperator;
@@ -18,9 +18,10 @@ public:
     }
 
 private:
-    void acquire() { waiting_count_.fetch_add(1, std::memory_order_relaxed); }
-    void release() {
-        if (waiting_count_.fetch_sub(1, std::memory_order_release) - 1 == 0)
+    void count_up() { waiting_count_.fetch_add(1, std::memory_order_relaxed); }
+    void count_down() {
+        auto old = waiting_count_.fetch_sub(1, std::memory_order_release);
+        if (old - 1 == 0)
             waiting_count_.notify_one();
     }
 

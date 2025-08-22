@@ -54,17 +54,17 @@ public:
 
     virtual ~Handler() { stop_handling_events(); };
 
-    void read_data_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id) {
+    void read_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id) {
         if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
             != OperatingState::NONE)
             return;
 
-        read_data_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
+        read_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
     }
 
-    void read_data_async(
+    void read_async(
         uint16_t index, uint8_t sub_index, int storage_id,
-        void (*callback)(Buffer8 context, Buffer8 data), Buffer8 callback_context) {
+        void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
         if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
             != OperatingState::NONE)
             throw std::runtime_error("Illegal checked read: Data is being operated!");
@@ -74,38 +74,35 @@ public:
         storage_[storage_id].operating_state.store(
             OperatingState::READING, std::memory_order::release);
 
-        read_data_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
+        read_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
     }
 
     template <size_t data_size>
-    void write_data_async_unchecked(
-        Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id) {
+    void write_async_unchecked(Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id) {
         if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
             != OperatingState::NONE)
             return;
 
         using T = SizeToUIntType<data_size>;
-        write_data_async_unchecked_internal(
-            default_transmit_buffer_, data.as<T>(), index, sub_index);
+        write_async_unchecked_internal(default_transmit_buffer_, data.as<T>(), index, sub_index);
     }
 
     template <size_t data_size>
-    void write_data_async(
+    void write_async(
         Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id,
-        void (*callback)(Buffer8 context, Buffer8 data), Buffer8 callback_context) {
+        void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
         if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
             != OperatingState::NONE)
             throw std::runtime_error("Illegal checked write: Data is being operated!");
 
-        storage_[storage_id].data.store(data, std::memory_order::relaxed);
+        storage_[storage_id].value.store(data, std::memory_order::relaxed);
         storage_[storage_id].callback.store(callback, std::memory_order::relaxed);
         storage_[storage_id].callback_context.store(callback_context, std::memory_order::relaxed);
         storage_[storage_id].operating_state.store(
             OperatingState::WRITING, std::memory_order::release);
 
         using T = SizeToUIntType<data_size>;
-        write_data_async_unchecked_internal(
-            default_transmit_buffer_, data.as<T>(), index, sub_index);
+        write_async_unchecked_internal(default_transmit_buffer_, data.as<T>(), index, sub_index);
     }
 
     void pdo_write_async_unchecked(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
@@ -120,8 +117,8 @@ public:
 
     bool trigger_transmission() { return default_transmit_buffer_.trigger_transmission(); }
 
-    Buffer8 data(int storage_id) {
-        return storage_[storage_id].data.load(std::memory_order::relaxed);
+    Buffer8 get(int storage_id) {
+        return storage_[storage_id].value.load(std::memory_order::relaxed);
     }
 
 private:
@@ -134,10 +131,10 @@ private:
         WRITING_CONFIRMING = 5,
     };
     struct StorageUnit {
-        std::atomic<Buffer8> data;
-        std::atomic<uint32_t> data_version = 0;
+        std::atomic<Buffer8> value;
+        std::atomic<uint32_t> version = 0;
         std::atomic<OperatingState> operating_state;
-        std::atomic<void (*)(Buffer8 context, Buffer8 data)> callback;
+        std::atomic<void (*)(Buffer8 context, Buffer8 value)> callback;
         std::atomic<Buffer8> callback_context;
     };
 
@@ -237,26 +234,26 @@ private:
         while (pointer < sentinel) {
             auto control = static_cast<uint8_t>(*pointer);
             if (control == 0x35)
-                read_sdo_data_success<uint8_t>(pointer);
+                read_sdo_operation_read_success<uint8_t>(pointer);
             else if (control == 0x37)
-                read_sdo_data_success<uint16_t>(pointer);
+                read_sdo_operation_read_success<uint16_t>(pointer);
             else if (control == 0x39)
-                read_sdo_data_success<uint32_t>(pointer);
+                read_sdo_operation_read_success<uint32_t>(pointer);
             else if (control == 0x3D)
-                read_sdo_data_success<uint64_t>(pointer);
+                read_sdo_operation_read_success<uint64_t>(pointer);
             else if (control == 0x33)
-                read_sdo_data_error(pointer);
+                read_sdo_operation_read_failed(pointer);
             else if (control == 0x21)
-                read_sdo_data_write_success(pointer);
+                read_sdo_operation_write_success(pointer);
             else if (control == 0x23)
-                read_sdo_data_write_error(pointer);
+                read_sdo_operation_write_failed(pointer);
             else
                 break;
         }
     }
 
     template <typename T>
-    void read_sdo_data_success(std::byte*& pointer) {
+    void read_sdo_operation_read_success(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::ReadResultSuccess<T>*>(pointer);
         pointer += sizeof(data);
 
@@ -268,30 +265,30 @@ private:
         auto operating_state = storage.operating_state.load(std::memory_order::acquire);
         if (operating_state != OperatingState::NONE) {
             if (operating_state == OperatingState::READING) {
-                complete_operation(storage, Buffer8{data.data});
+                complete_operation(storage, Buffer8{data.value});
             } else if (operating_state == OperatingState::WRITING_CONFIRMING) {
-                if (data.data == storage.data.load(std::memory_order::relaxed).as<T>())
+                if (data.value == storage.value.load(std::memory_order::relaxed).as<T>())
                     complete_operation(storage);
                 else {
                     storage.operating_state.store(
                         OperatingState::WRITING, std::memory_order::relaxed);
-                    write_data_async_unchecked_internal(
+                    write_async_unchecked_internal(
                         event_thread_transmit_buffer_,
-                        storage.data.load(std::memory_order::relaxed).as<T>(), data.header.index,
+                        storage.value.load(std::memory_order::relaxed).as<T>(), data.header.index,
                         data.header.sub_index);
                 }
                 return;
             }
         }
 
-        storage.data.store(Buffer8{data.data}, std::memory_order::relaxed);
-        auto new_version = storage.data_version.load(std::memory_order::relaxed) + 1;
+        storage.value.store(Buffer8{data.value}, std::memory_order::relaxed);
+        auto new_version = storage.version.load(std::memory_order::relaxed) + 1;
         if (new_version == 0)
             new_version = 1;
-        storage.data_version.store(new_version, std::memory_order::release);
+        storage.version.store(new_version, std::memory_order::release);
     }
 
-    void read_sdo_data_error(std::byte*& pointer) {
+    void read_sdo_operation_read_failed(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::ReadResultError*>(pointer);
         pointer += sizeof(data);
 
@@ -304,12 +301,12 @@ private:
         if (operating_state != OperatingState::NONE) {
             if (operating_state == OperatingState::READING
                 || operating_state == OperatingState::WRITING_CONFIRMING)
-                read_data_async_unchecked_internal(
+                read_async_unchecked_internal(
                     event_thread_transmit_buffer_, data.header.index, data.header.sub_index);
         }
     }
 
-    void read_sdo_data_write_success(std::byte*& pointer) {
+    void read_sdo_operation_write_success(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::WriteResultSuccess*>(pointer);
         pointer += sizeof(data);
 
@@ -325,7 +322,7 @@ private:
         }
     }
 
-    void read_sdo_data_write_error(std::byte*& pointer) {
+    void read_sdo_operation_write_failed(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::WriteResultError*>(pointer);
         pointer += sizeof(data);
 
@@ -339,13 +336,13 @@ private:
             if (operating_state == OperatingState::WRITING) {
                 storage.operating_state.store(
                     OperatingState::WRITING_CONFIRMING, std::memory_order::relaxed);
-                read_data_async_unchecked_internal(
+                read_async_unchecked_internal(
                     event_thread_transmit_buffer_, data.header.index, data.header.sub_index);
             }
         }
     }
 
-    static void read_data_async_unchecked_internal(
+    static void read_async_unchecked_internal(
         AsyncTransmitBuffer<protocol::Header>& transmit_buffer, uint16_t index, uint8_t sub_index) {
         std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Read));
         new (buffer) protocol::sdo::Read{
@@ -355,15 +352,15 @@ private:
     }
 
     template <protocol::is_type_erased_integral T>
-    void write_data_async_unchecked_internal(
-        AsyncTransmitBuffer<protocol::Header>& transmit_buffer, T data, uint16_t index,
+    void write_async_unchecked_internal(
+        AsyncTransmitBuffer<protocol::Header>& transmit_buffer, T value, uint16_t index,
         uint8_t sub_index) {
 
         std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Write<T>));
         new (buffer) protocol::sdo::Write<T>{
             .index = index,
             .sub_index = sub_index,
-            .data = data,
+            .value = value,
         };
     }
 
