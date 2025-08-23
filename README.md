@@ -1,6 +1,6 @@
 # WujihandCpp: A C++ based Wujihand SDK
 
-这是一个使用 C++20 **全新编写的** Wujihand 灵巧手 SDK (Software Development Kit)。
+这是一个使用 C++20 **全新编写的** 舞肌灵巧手 SDK (Software Development Kit)。
 
 旨在提供更高效、更易用的接口与灵巧手设备进行交互。
 
@@ -25,7 +25,8 @@ wujihandcpp::device::Hand hand{0x0483, 0x5740};
 ### 读数据
 
 ```cpp
-read<typename Data>() -> typename Data::ValueType / void;
+read<typename Data>() -> Data::ValueType;
+read<typename Data>() -> void; // (For Bulk-Read)
 ```
 
 所有可使用的数据类型均定义在 `wujihandcpp/data/data.hpp` 中。
@@ -33,7 +34,7 @@ read<typename Data>() -> typename Data::ValueType / void;
 例如，读取灵巧手的上电运行时间(us)：
 
 ```cpp
-uint32_t time = hand.read<data::hand::SystemTime>();
+uint32_t time = hand.read<wujihandcpp::data::hand::SystemTime>();
 ```
 
 除整手唯一的数据外，每个关节也有自己的数据，定义在 `data::joint` 命名空间下。
@@ -41,21 +42,23 @@ uint32_t time = hand.read<data::hand::SystemTime>();
 例如，读取第1个手指（食指），第0个关节的当前位置数据：
 
 ```cpp
-int32_t position = hand.finger(1).joint(0).read<data::joint::Position>();
+int32_t position = hand.finger(1).joint(0).read<wujihandcpp::data::joint::Position>();
 ```
 
-用一条指令读取整手所有关节的数据也是可行的，这被称为**批量读**：
+用一条指令读取多个数据也是可行的，这被称为**批量读 (Bulk-Read)**。
+
+例如，以下指令读取整手所有（20个）关节的当前位置数据：
 
 ```cpp
-hand.read<data::joint::Position>();
+hand.read<wujihandcpp::data::joint::Position>();
 ```
 
-需要注意的是，当进行批量读时，`read` 函数的返回值为 `void`。
+由于一次性获取了多个数据，为避免不必要的开销，当进行批量读时，`read` 函数的返回值为 `void`。
 
-此时若希望获取读取完成的数据，需要在 `read` 后调用：
+此时若希望获取读取完成的数据，需在 `read` 后调用 `get` 函数：
 
 ```cpp
-hand.finger(1).joint(0).get<data::joint::Position>();
+hand.finger(i).joint(j).get<wujihandcpp::data::joint::Position>();
 ```
 
 `read` 函数会阻塞，直到读取完成。保证当函数返回时，读取一定成功。
@@ -74,13 +77,13 @@ write<typename Data>(Data::ValueType value) -> void;
 例如，写入单个关节的目标位置数据：
 
 ```cpp
-hand.finger(1).joint(0).write<data::joint::ControlPosition>(0x8FFFFF);
+hand.finger(1).joint(0).write<wujihandcpp::data::joint::ControlPosition>(0x8FFFFF);
 ```
 
 **批量写**数据也是可行的，例如，批量写入第1个手指的目标位置数据：
 
 ```cpp
-hand.finger(1).write<data::joint::ControlPosition>(0x8FFFFF);
+hand.finger(1).write<wujihandcpp::data::joint::ControlPosition>(0x8FFFFF);
 ```
 
 `write` 函数会阻塞，直到写入完成。保证当函数返回时，写入一定成功。
@@ -102,7 +105,7 @@ cmake .. && make -j
 
 ### 构建示例程序
 
-在 `example` 目录下有一些示例程序。 进入某个示例程序目录，例如 `example/simple_test`：
+在 `example` 目录下有一些示例程序。 进入某个示例程序目录，以 `example/simple_test` 为例：
 ```bash
 cd example/simple_test
 mkdir build && cd build
