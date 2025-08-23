@@ -17,7 +17,6 @@ int main() {
     static std::atomic<bool> running{true};
     std::signal(SIGINT, [](int) { running.store(false, std::memory_order_relaxed); });
 
-    // using namespace std::chrono_literals;
     device::Hand hand{0x0483, 0x5740};
 
     // Set control mode
