@@ -77,15 +77,6 @@ private:
         auto selected_device = select_device(vendor_id, product_id);
         if (!selected_device)
             return false;
-
-        ret = libusb_open(selected_device, &libusb_device_handle_);
-        if (ret != 0) [[unlikely]] {
-            LOG_ERROR(
-                "Device with vendor id: 0x%x and product id: 0x%x was successfully detected but "
-                "could not be opened: %d",
-                vendor_id, product_id, ret);
-            return false;
-        }
         utility::FinalAction close_device_handle{[this]() { libusb_close(libusb_device_handle_); }};
 
         if constexpr (utility::is_linux()) {
@@ -131,11 +122,16 @@ private:
     }
 
     libusb_device* select_device(uint16_t vendor_id, int32_t product_id) {
-        libusb_device** device_list;
-        int device_count = static_cast<int>(libusb_get_device_list(libusb_context_, &device_list));
-        utility::FinalAction free_device_list{[&device_list, &device_count]() {
-            libusb_free_device_list(device_list, device_count);
-        }};
+        libusb_device** device_list = nullptr;
+        const ssize_t device_count_raw = libusb_get_device_list(libusb_context_, &device_list);
+        if (device_count_raw < 0) {
+            LOG_ERROR("Failed to get device list: %zd", device_count_raw);
+            return nullptr;
+        }
+
+        const int device_count = static_cast<int>(device_count_raw);
+        utility::FinalAction free_device_list{
+            [&device_list]() { libusb_free_device_list(device_list, 1); }};
 
         auto device_descriptors = new libusb_device_descriptor[device_count];
         utility::FinalAction free_device_descriptors{
@@ -195,6 +191,17 @@ private:
                 LOG_ERROR("To ensure correct device selection, please specify the product id");
             }
             return nullptr;
+        }
+
+        if (selected_device) {
+            int ret = libusb_open(selected_device, &libusb_device_handle_);
+            if (ret != 0) [[unlikely]] {
+                LOG_ERROR(
+                    "Device with vendor id: 0x%x and product id: 0x%x was successfully detected "
+                    "but could not be opened: %d",
+                    vendor_id, product_id, ret);
+                return nullptr;
+            }
         }
 
         return selected_device;

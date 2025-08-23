@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include <stdexcept>
+
 #include "wujihandcpp/data/hand.hpp"
 #include "wujihandcpp/device/data_operator.hpp"
 #include "wujihandcpp/device/data_tuple.hpp"
@@ -15,7 +17,11 @@ class Finger : public DataOperator<Finger> {
     friend class Hand;
 
 public:
-    Joint joint(int index) { return sub(index); }
+    Joint joint(int index) {
+        if (index < 0 || index > 3)
+            throw std::runtime_error("Index out of bounds! Possible values: 0, 1, 2, 3.");
+        return sub(index);
+    }
 
 private:
     Finger(protocol::Handler& handler, uint16_t index_offset, int storage_offset)

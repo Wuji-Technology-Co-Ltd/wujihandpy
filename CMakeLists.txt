@@ -69,9 +69,5 @@ elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
 endif()
 
-if(NOT MSVC)
-    target_link_options(${PROJECT_NAME} PRIVATE -static-libstdc++ -Wl,--exclude-libs,ALL)
-endif()
-
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)

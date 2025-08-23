@@ -16,13 +16,18 @@ public:
 
         template <typename T>
         explicit Buffer8(const T& value) {
-            static_assert(sizeof(T) <= 8);
+            static_assert(sizeof(std::remove_cvref_t<T>) <= 8);
+            static_assert(
+                std::is_trivially_copyable_v<std::remove_cvref_t<T>>
+                && std::is_trivially_destructible_v<std::remove_cvref_t<T>>);
             new (storage) std::remove_cvref_t<T>{value};
         };
 
         template <typename T>
-        std::remove_cvref_t<T>& as() {
-            return *reinterpret_cast<std::remove_cvref_t<T>*>(storage);
+        std::remove_cvref_t<T> as() const {
+            std::remove_cvref_t<T> out;
+            std::memcpy(&out, storage, sizeof(out));
+            return out;
         }
 
         alignas(8) std::byte storage[8];
