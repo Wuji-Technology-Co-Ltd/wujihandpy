@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(wujihandcpp LANGUAGES C CXX)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(PROJECT_VERSION 1.0.0)
 
 # Set C++ standard to C++20
 set(CMAKE_CXX_STANDARD 20)
@@ -19,6 +19,8 @@ set(CMAKE_C_EXTENSIONS OFF)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add compiler options based on compiler
 if(MSVC)
@@ -71,3 +73,19 @@ endif()
 
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
+
+if(UNIX AND NOT APPLE)
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_DEBIAN_PACKAGE_NAME "${PROJECT_NAME}")
+    set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Zihan Qin <zihanqin2048@gmail.com>")
+    set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "A lightweight C++ based wujihand SDK")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Wuji-Technology-Co-Ltd/wujihandcpp")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0-0 (>= 2:1.0.23)")
+    set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+    set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+
+    include(CPack)
+endif()

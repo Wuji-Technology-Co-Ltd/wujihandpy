@@ -1,0 +1,20 @@
+FROM quay.io/pypa/manylinux_2_28_x86_64
+
+RUN dnf install -y libusbx libusbx-devel zip && dnf clean all
+
+COPY --chmod=+x <<'EOF' /build-package.sh
+#!/bin/bash
+set -e
+
+cmake -DCMAKE_INSTALL_PREFIX=/install /source
+make -j && make install
+cpack -G DEB
+cp ./*.deb /output
+
+deb_files=(./*.deb)
+deb_file="${deb_files[0]}"
+zip -r "/output/$(basename "${deb_file%.deb}").zip" /install/*
+EOF
+
+WORKDIR /build
+CMD ["/build-package.sh"]

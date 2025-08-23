@@ -59,7 +59,6 @@ add_executable(
     ${PROJECT_SOURCE}
 )
 
-include_directories(${PROJECT_SOURCE_DIR}/../../include)
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
 if(WIN32)
@@ -68,5 +67,4 @@ elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
 endif()
 
-target_link_directories(${PROJECT_NAME} PRIVATE /workspaces/wujihand_test/build)
 target_link_libraries(${PROJECT_NAME} PRIVATE wujihandcpp)

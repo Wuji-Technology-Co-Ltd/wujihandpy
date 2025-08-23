@@ -1,12 +1,97 @@
-# WujihandCpp: A C++ based Wujihand SDK
+# WujihandCpp: A Lightweight C++ SDK for Wujihand
 
 这是一个使用 C++20 **全新编写的** 舞肌灵巧手 SDK (Software Development Kit)。
 
-旨在提供更高效、更易用的接口与灵巧手设备进行交互。
+旨在提供更简洁、更高效、更易用的接口与灵巧手设备进行交互。
 
 警告：这不是一个 "stable" SDK，其接口和功能可能会在未来的版本中发生变化。
 
+要访问旧版本 SDK（使用Python编写），请前往 (TODO)。
+
+## 最低系统要求 (Linux)
+
+最低系统要求仅适用于在本地直接使用 SDK 的情况。
+若通过 Docker 进行开发，可在任意 Linux 发行版上使用，无需关注系统版本。
+
+### glibc 2.28+
+
+使用 glibc 2.28 或更高版本的 Linux 发行版：
+- Debian 10+
+- Ubuntu 18.10+
+- Fedora 29+
+- CentOS/RHEL 8+
+
+### C++11 编译工具链
+
+支持 C++11 或更高版本的 C++ 编译器：
+- GCC 5+
+- Clang 4+
+<!-- - MSVC 2015+ -->
+
+### libusb 1.0
+
+需安装 libusb 的运行时库：
+
+- Debian/Ubuntu: `sudo apt install libusb-1.0-0`
+- Fedora/CentOS/RHEL: `sudo dnf install libusbx` 或 `sudo yum install libusbx`
+
+## 最低系统要求 (Windows)
+
+WujihandCpp 目前暂不支持 Windows，我们会尽快推进相关支持。
+
+## 安装
+
+### Docker (推荐)
+
+我们提供了一个基于 Ubuntu 24.04 的 Docker 镜像，内置了所有必要的依赖和编译工具链。
+
+SDK 已在镜像中全局安装，可直接在容器内进行开发。
+
+Ubuntu 24 和 GCC-14 的组合支持完整的 C++20 特性，可确保 SDK 的最佳优化和使用体验。
+
+### SDK 发布包​​
+
+如果不希望使用 Docker，也可通过 Release 页面 的发布包​​进行安装。
+
+- Debian/Ubuntu: `sudo apt install ./wujihandcpp_<version>_<platform>.deb`
+
+- 其他发行版：可由 `wujihandcpp_<version>_<platform>.zip` 手动安装头文件和库文件。
+
+### 从源码构建
+
+见 (TODO)。
+
+## 使用
+
+链接 wujihandcpp 库即可。
+
+### CMake
+
+<!-- ```cmake
+find_package(wujihandcpp REQUIRED)
+target_link_libraries(your_target PRIVATE wujihandcpp::wujihandcpp)
+``` -->
+
+```cmake
+target_link_libraries(<your_target> PRIVATE wujihandcpp)
+```
+
+### Make
+
+```makefile
+LDFLAGS += -lwujihandcpp
+```
+
+可在 `example` 目录中查看使用示例。
+
 ## 部分参考 API
+
+### 引入头文件
+
+```cpp
+#include <wujihandcpp/data/hand.hpp>   // For data types
+#include <wujihandcpp/device/hand.hpp> // For hand device
+```
 
 ### 连接至灵巧手
 
@@ -26,7 +111,7 @@ wujihandcpp::device::Hand hand{0x0483, 0x5740};
 
 ```cpp
 read<typename Data>() -> Data::ValueType;
-read<typename Data>() -> void; // (For Bulk-Read)
+read<typename Data>() -> void; // For bulk-read
 ```
 
 所有可使用的数据类型均定义在 `wujihandcpp/data/data.hpp` 中。
@@ -88,31 +173,6 @@ hand.finger(1).write<wujihandcpp::data::joint::ControlPosition>(0x8FFFFF);
 
 `write` 函数会阻塞，直到写入完成。保证当函数返回时，写入一定成功。
 
-## 构建
+## 许可证
 
-### 构建 SDK
-
-构建 SDK 需要 CMake 3.16+ 和一个支持 C++20 的编译器。
-
-目前 SDK 仅能在 Linux 上构建，我们会尽快推进 Windows 的支持。
-
-```bash
-git clone https://github.com/Wuji-Technology-Co-Ltd/wujihandcpp.git
-cd wujihandcpp
-mkdir build && cd build
-cmake .. && make -j
-```
-
-### 构建示例程序
-
-在 `example` 目录下有一些示例程序。 进入某个示例程序目录，以 `example/simple_test` 为例：
-```bash
-cd example/simple_test
-mkdir build && cd build
-cmake .. && make -j
-```
-
-运行生成的可执行文件：
-```bash
-sudo ./simple_test
-```
+本项目采用 MIT 许可证，详情见 [LICENSE](LICENSE) 文件。
