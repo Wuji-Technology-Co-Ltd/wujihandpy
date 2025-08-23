@@ -2,7 +2,8 @@
 
 #include <chrono>
 
-namespace wujihandcpp::utility {
+namespace wujihandcpp {
+namespace utility {
 
 class FpsCounter {
 public:
@@ -36,4 +37,5 @@ private:
     double fps_ = 0;
 };
 
-} // namespace wujihandcpp::utility
+} // namespace utility
+} // namespace wujihandcpp

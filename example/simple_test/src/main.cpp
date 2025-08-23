@@ -2,6 +2,7 @@
 #include <csignal>
 
 #include <atomic>
+#include <chrono>
 #include <iostream>
 #include <thread>
 
@@ -13,10 +14,10 @@
 using namespace wujihandcpp;
 
 int main() {
-    static std::atomic<bool> running = true;
-    std::signal(SIGINT, [](int) { running.store(false, std::memory_order::relaxed); });
+    static std::atomic<bool> running{true};
+    std::signal(SIGINT, [](int) { running.store(false, std::memory_order_relaxed); });
 
-    using namespace std::chrono_literals;
+    // using namespace std::chrono_literals;
     device::Hand hand{0x0483, 0x5740};
 
     // Set control mode
@@ -51,21 +52,20 @@ int main() {
     latch.wait();
 
     // Wait for joints to move into place
-    std::this_thread::sleep_for(500ms);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     // Disable the thumb
     hand.finger(0).write<data::joint::ControlWord>(5);
 
     // 1kHz SDO Control
-    using namespace std::chrono_literals;
     constexpr double update_rate = 1000.0;
-    constexpr auto update_period =
-        std::chrono::round<std::chrono::steady_clock::duration>(1.0s / update_rate);
+    constexpr auto update_period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(1.0 / update_rate));
 
     auto next_iteration_time = std::chrono::steady_clock::now();
     utility::FpsCounter fps_counter;
     double x = 0;
-    while (running.load(std::memory_order::relaxed)) {
+    while (running.load(std::memory_order_relaxed)) {
         if (fps_counter.count())
             std::cout << "SDO Control Actual Fps: " << fps_counter.fps() << '\n';
 

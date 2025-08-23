@@ -1,11 +1,11 @@
-#include <chrono>
 #include <cmath>
 #include <csignal>
+#include <cstdint>
 
 #include <atomic>
-#include <cstdint>
-#include <thread>
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/device/hand.hpp>
@@ -15,10 +15,9 @@
 using namespace wujihandcpp;
 
 int main() {
-    static std::atomic<bool> running = true;
-    std::signal(SIGINT, [](int) { running.store(false, std::memory_order::relaxed); });
+    static std::atomic<bool> running{true};
+    std::signal(SIGINT, [](int) { running.store(false, std::memory_order_relaxed); });
 
-    using namespace std::chrono_literals;
     device::Hand hand{0x0483, 0x5740};
 
     // Set control mode & enable whole hand
@@ -53,7 +52,7 @@ int main() {
     latch.wait();
 
     // Wait for joints to move into place
-    std::this_thread::sleep_for(100ms);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     hand.write<data::joint::ControlWord>(5);
 
     // Enable CSP & PDO Control
@@ -68,11 +67,10 @@ int main() {
     for (int i = 1; i < 5; i++)
         hand.finger(i).joint(1).write<data::joint::ControlWord>(5);
 
-    // 1kHz PDO Control
-    using namespace std::chrono_literals;
+    // 1kHz SDO Control
     constexpr double update_rate = 1000.0;
-    constexpr auto update_period =
-        std::chrono::round<std::chrono::steady_clock::duration>(1.0s / update_rate);
+    constexpr auto update_period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(1.0 / update_rate));
 
     auto begin = std::chrono::steady_clock::now();
     auto next_iteration_time = begin;
@@ -86,7 +84,7 @@ int main() {
     control_positions[0][2] = 0x200000;
     control_positions[0][3] = 0x200000;
 
-    while (running.load(std::memory_order::relaxed)) {
+    while (running.load(std::memory_order_relaxed)) {
         if (fps_counter.count())
             std::cout << "PDO Control Actual Fps: " << fps_counter.fps() << '\n';
 

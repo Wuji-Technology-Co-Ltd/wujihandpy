@@ -3,7 +3,8 @@
 #include <cstdint>
 #include <limits>
 
-namespace wujihandcpp::device {
+namespace wujihandcpp {
+namespace device {
 
 template <typename... Types>
 class DataTuple {
@@ -22,10 +23,9 @@ class DataTuple {
 
     template <int id, typename T, typename... Ts>
     static constexpr int match_index_internal(const uint16_t index, const uint8_t sub_index) {
-        if (T::index == index && T::sub_index == sub_index)
-            return id;
-        else
-            return match_index_internal<id + 1, Ts...>(index, sub_index);
+        return (T::index == index && T::sub_index == sub_index)
+                 ? id
+                 : match_index_internal<id + 1, Ts...>(index, sub_index);
     }
 
     template <int id>
@@ -39,11 +39,14 @@ public:
     static constexpr int count = sizeof...(Types);
 
     template <typename T>
-    static constexpr int index = get_index_internal<0, T, Types...>::type::index;
+    static constexpr int index() {
+        return get_index_internal<0, T, Types...>::type::index;
+    }
 
     static constexpr int match_index(const uint16_t index, const uint8_t sub_index) {
         return match_index_internal<0, Types...>(index, sub_index);
     }
 };
 
-} // namespace wujihandcpp::device
+} // namespace device
+} // namespace wujihandcpp

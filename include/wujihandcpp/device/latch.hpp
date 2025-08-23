@@ -2,7 +2,8 @@
 
 #include <atomic>
 
-namespace wujihandcpp::device {
+namespace wujihandcpp {
+namespace device {
 
 class Latch {
 public:
@@ -15,7 +16,8 @@ private:
     void count_up();
     void count_down();
 
-    std::atomic<int> waiting_count_ = 0;
+    std::atomic<int> waiting_count_{0};
 };
 
-} // namespace wujihandcpp::device
+} // namespace device
+} // namespace wujihandcpp

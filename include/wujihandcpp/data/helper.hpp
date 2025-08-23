@@ -3,7 +3,8 @@
 #include <cstdint>
 #include <cstring>
 
-namespace wujihandcpp::data {
+namespace wujihandcpp {
+namespace data {
 
 template <typename Base_, uint16_t index_, uint8_t sub_index_, typename ValueType_>
 struct RemoteData {
@@ -17,4 +18,5 @@ struct RemoteData {
     using ValueType = ValueType_;
 };
 
-} // namespace wujihandcpp::data
+} // namespace data
+} // namespace wujihandcpp

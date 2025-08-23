@@ -6,7 +6,8 @@
 
 #include <type_traits>
 
-namespace wujihandcpp::protocol {
+namespace wujihandcpp {
+namespace protocol {
 
 class Handler final {
 
@@ -15,23 +16,27 @@ public:
         Buffer8() = default;
 
         template <typename T>
+        using remove_cvref_t = typename std::remove_cv<typename std::remove_cv<T>::type>::type;
+
+        template <typename T>
         explicit Buffer8(const T& value) {
-            static_assert(sizeof(std::remove_cvref_t<T>) <= 8);
+            static_assert(sizeof(remove_cvref_t<T>) <= 8, "");
             static_assert(
-                std::is_trivially_copyable_v<std::remove_cvref_t<T>>
-                && std::is_trivially_destructible_v<std::remove_cvref_t<T>>);
-            new (storage) std::remove_cvref_t<T>{value};
+                std::is_trivially_copyable<remove_cvref_t<T>>::value
+                    && std::is_trivially_destructible<remove_cvref_t<T>>::value,
+                "");
+            new (storage) remove_cvref_t<T>{value};
         };
 
         template <typename T>
-        std::remove_cvref_t<T> as() const {
-            std::remove_cvref_t<T> out;
+        remove_cvref_t<T> as() const {
+            remove_cvref_t<T> out;
             std::memcpy(&out, storage, sizeof(out));
             return out;
         }
 
-        alignas(8) std::byte storage[8];
-        static_assert(sizeof(void*) == 8);
+        alignas(8) uint8_t storage[8];
+        static_assert(sizeof(void*) == 8, "");
     };
 
     explicit Handler(
@@ -66,4 +71,5 @@ private:
     alignas(impl_align) uint8_t impl_[808];
 };
 
-} // namespace wujihandcpp::protocol
+} // namespace protocol
+} // namespace wujihandcpp

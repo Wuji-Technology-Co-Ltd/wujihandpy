@@ -10,7 +10,8 @@
 #include "wujihandcpp/device/joint.hpp"
 #include "wujihandcpp/protocol/handler.hpp"
 
-namespace wujihandcpp::device {
+namespace wujihandcpp {
+namespace device {
 
 class Finger : public DataOperator<Finger> {
     friend class DataOperator;
@@ -43,7 +44,7 @@ private:
             int(storage_offset_ + Datas::count + index * Sub::data_count())};
     }
 
-    constexpr static int index_to_storage_id(uint16_t index, uint8_t sub_index) {
+    static int index_to_storage_id(uint16_t index, uint8_t sub_index) {
         if (index >= 0x300)
             return Datas::count + 3 * Sub::data_count()
                  + Sub::index_to_storage_id(index - 0x300, sub_index);
@@ -59,4 +60,5 @@ private:
     }
 };
 
-} // namespace wujihandcpp::device
+} // namespace device
+} // namespace wujihandcpp

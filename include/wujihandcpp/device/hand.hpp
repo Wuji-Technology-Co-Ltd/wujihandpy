@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -12,7 +13,8 @@
 #include "wujihandcpp/device/finger.hpp"
 #include "wujihandcpp/protocol/handler.hpp"
 
-namespace wujihandcpp::device {
+namespace wujihandcpp {
+namespace device {
 
 class Hand : public DataOperator<Hand> {
     friend class DataOperator;
@@ -56,7 +58,7 @@ private:
             int(Datas::count + index * Sub::data_count())};
     }
 
-    constexpr static int index_to_storage_id(uint16_t index, uint8_t sub_index) {
+    static int index_to_storage_id(uint16_t index, uint8_t sub_index) {
         if (index >= 0x5000)
             return Datas::match_index(index, sub_index);
         else if (index >= 0x4000)
@@ -79,4 +81,5 @@ private:
     }
 };
 
-} // namespace wujihandcpp::device
+} // namespace device
+} // namespace wujihandcpp

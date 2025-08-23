@@ -7,7 +7,8 @@
 #include "wujihandcpp/device/data_tuple.hpp"
 #include "wujihandcpp/protocol/handler.hpp"
 
-namespace wujihandcpp::device {
+namespace wujihandcpp {
+namespace device {
 
 class Joint : public DataOperator<Joint> {
     friend class DataOperator;
@@ -32,4 +33,5 @@ private:
     }
 };
 
-} // namespace wujihandcpp::device
+} // namespace device
+} // namespace wujihandcpp
