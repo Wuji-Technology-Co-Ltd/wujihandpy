@@ -1,4 +1,5 @@
 build/
+package-build/
 
 # Clangd cache files
 .cache/

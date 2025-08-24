@@ -1,43 +1,53 @@
 name: Release Package CI
 
+permissions:
+  contents: write
+
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
+  pull_request:
+    tags: ["v*"]
   workflow_dispatch:
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Build Docker image
-      run: |
-        docker build -t packager:latest -f Dockerfile.packager .
-      
-    - name: Run package builder
-      run: |
-        docker run --rm \
-          -v "$(pwd):/source:ro" \
-          -v "$(pwd)/package-build:/output:rw" \
-          packager:latest
-          
-    - name: List built packages
-      run: ls -al package-build/
-      
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        files: package-build/*
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          file: Dockerfile.package-builder
+          outputs: type=local,dest=package-build/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: List built packages
+        run: find package-build/*
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ github.ref_type != 'tag' }}
+          make_latest: ${{ github.ref_type == 'tag' }}
+          files: |
+            package-build/linux_amd64/*.deb
+            package-build/linux_amd64/*.zip
+            package-build/linux_arm64/*.deb
+            package-build/linux_arm64/*.zip
