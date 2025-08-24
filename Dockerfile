@@ -8,19 +8,11 @@ RUN echo 'Etc/UTC' > /etc/timezone && \
     ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
-ENV TZ=Asia/Shanghai
-
-# Modify the apt source
-COPY <<EOF /etc/apt/sources.list.d/ubuntu.sources
-Types: deb
-URIs: http://mirrors.tuna.tsinghua.edu.cn/ubuntu/
-Suites: noble noble-updates noble-security
-Components: main restricted universe multiverse
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
+ENV TZ=Etc/UTC
 
 # Install tools and libraries.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
     vim wget curl unzip \
     zsh usbutils \
     libusb-1.0-0-dev \
@@ -53,6 +45,16 @@ RUN --mount=type=bind,target=/wujihandcpp,source=.,readonly \
     cpack -G DEB && \
     dpkg -i wujihandcpp*.deb && \
     rm -rf /var/lib/apt/lists/* /tmp/*
+
+# For CN user: use command below to replace apt source with tsinghua mirror
+# > sudo cp /etc/apt/sources.list.d/ubuntu.sources.cn /etc/apt/sources.list.d/ubuntu.sources
+COPY <<EOF /etc/apt/sources.list.d/ubuntu.sources.cn
+Types: deb
+URIs: http://mirrors.tuna.tsinghua.edu.cn/ubuntu/
+Suites: noble noble-updates noble-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
 
 # Change user
 RUN chsh -s /bin/zsh ubuntu && \
