@@ -48,6 +48,8 @@ jobs:
           make_latest: ${{ github.ref_type == 'tag' }}
           files: |
             package-build/linux_amd64/*.deb
+            package-build/linux_amd64/*.rpm
             package-build/linux_amd64/*.zip
             package-build/linux_arm64/*.deb
+            package-build/linux_arm64/*.rpm
             package-build/linux_arm64/*.zip
