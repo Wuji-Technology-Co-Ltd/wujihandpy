@@ -1,6 +1,6 @@
 # WujihandCpp: A Lightweight C++ SDK for Wujihand
 
-这是一个使用 C++20 **全新编写的** 舞肌灵巧手 SDK (Software Development Kit)。
+这是一个使用 C++ **全新编写的** 舞肌灵巧手 SDK (Software Development Kit)。
 
 旨在提供更简洁、更高效、更易用的接口与灵巧手设备进行交互。
 
@@ -10,8 +10,12 @@
 
 ## 最低系统要求 (Linux)
 
-最低系统要求仅适用于在本地直接使用 SDK 的情况。
+最低系统要求仅适用于在本地使用 SDK 发布包的情况。
+发布包头文件仅依赖 C++11，且在尽量旧的 glibc 版本下构建，可保证低版本发行版和编译器的兼容性。
+
 若通过 Docker 进行开发，可在任意 Linux 发行版上使用，无需关注系统版本。
+
+若通过源码编译安装，则必须使用完整支持 C++20 的编译器（GCC 13+/Clang 17+）进行构建。
 
 ### glibc 2.28+
 
@@ -32,8 +36,8 @@
 
 需安装 libusb 的运行时库：
 
-- Debian/Ubuntu: `sudo apt install libusb-1.0-0`
-- Fedora/CentOS/RHEL: `sudo dnf install libusbx` 或 `sudo yum install libusbx`
+- Debian/Ubuntu: `sudo apt install libusb-1.0-0-dev`
+- Fedora/CentOS/RHEL: `sudo dnf install libusbx-devel`
 
 ## 最低系统要求 (Windows)
 
@@ -43,19 +47,21 @@ WujihandCpp 目前暂不支持 Windows，我们会尽快推进相关支持。
 
 ### Docker (推荐)
 
-我们提供了一个基于 Ubuntu 24.04 的 Docker 镜像，内置了所有必要的依赖和编译工具链。
+我们提供了一个基于 Ubuntu 24.04 & GCC-14 的 Docker 镜像，内置了所有必要的依赖和编译工具链。
 
 SDK 已在镜像中全局安装，可直接在容器内进行开发。
 
-Ubuntu 24 和 GCC-14 的组合支持完整的 C++20 特性，可确保 SDK 的最佳优化和使用体验。
+Ubuntu 24 拥有较新的 glibc，GCC-14 支持完整的 C++20 特性，两者组合可确保 SDK 的最佳优化和使用体验。
 
 ### SDK 发布包​​
 
 如果不希望使用 Docker，也可通过 Release 页面 的发布包​​进行安装。
 
-- Debian/Ubuntu: `sudo apt install ./wujihandcpp_<version>_<platform>.deb`
+- Debian/Ubuntu: `sudo apt install ./wujihandcpp-<version>-<arch>.deb`
 
-- 其他发行版：可由 `wujihandcpp_<version>_<platform>.zip` 手动安装头文件和库文件。
+- Fedora/CentOS/RHEL: `sudo dnf install ./wujihandcpp-<version>-<arch>.rpm`
+
+- 其他发行版：可由 `wujihandcpp-<version>-<arch>.zip` 手动安装头文件和库文件。
 
 ### 从源码构建
 
