@@ -1,0 +1,68 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'CMakeLists.txt'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force build even if version did not change'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check_version.outputs.version_changed }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+    
+    - name: Check if version line changed
+      id: check_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_build }}" = true ]; then
+          echo "Manual trigger with force build - skipping version check"
+          echo "version_changed=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        if git diff --exit-code HEAD^ HEAD -- CMakeLists.txt | grep -q "^[+-].*set(PROJECT_VERSION"; then
+          echo "version_changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "version_changed=false" >> $GITHUB_OUTPUT
+        fi
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Extract project version
+      id: extract_version_build
+      run: |
+        VERSION=$(grep -oP 'set\(PROJECT_VERSION\s+\K[^)]+' CMakeLists.txt | tr -d '" ')
+        echo "PROJECT_VERSION=$VERSION" >> $GITHUB_ENV
+        echo "Extracted version for build: $VERSION"
+    
+    - name: Build the Docker image
+      run: |
+        docker build . --file Dockerfile --tag my-image-name:${{ env.PROJECT_VERSION }} --tag my-image-name:latest
+        echo "Built image with tag: ${{ env.PROJECT_VERSION }}, latest"
+    
