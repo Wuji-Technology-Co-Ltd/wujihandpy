@@ -6,7 +6,7 @@
 
 警告：这不是一个 "stable" SDK，其接口和功能可能会在未来的版本中发生变化。
 
-要访问旧版本 SDK（使用Python编写），请前往 (TODO)。
+要访问旧版本 SDK（使用Python编写），请前往 [wujihand_sdk](https://github.com/Wuji-Technology-Co-Ltd/wujihand_sdk)。
 
 ## 最低系统要求 (Linux)
 
@@ -47,7 +47,7 @@ WujihandCpp 目前暂不支持 Windows，我们会尽快推进相关支持。
 
 ### Docker (推荐)
 
-我们提供了一个基于 Ubuntu 24.04 & GCC-14 的 Docker 镜像，内置了所有必要的依赖和编译工具链。
+我们提供了一个基于 Ubuntu 24.04 & GCC-14 的 Docker 镜像，内置了所有必要的依赖和编译工具链，见 [Docker 开发指南](docs/zh-cn/docker-develop-guide.md)。
 
 SDK 已在镜像中全局安装，可直接在容器内进行开发。
 
