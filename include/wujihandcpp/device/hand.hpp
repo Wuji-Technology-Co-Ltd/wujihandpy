@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -40,6 +39,8 @@ public:
     }
 
     void trigger_transmission() { handler_.trigger_transmission(); }
+
+    void disable_thread_safe_check() { handler_.disable_thread_safe_check(); }
 
 private:
     using Datas = DataTuple<

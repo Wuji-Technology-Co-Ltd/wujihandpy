@@ -30,13 +30,15 @@ public:
         , default_transmit_buffer_(*this, buffer_transfer_count)
         , event_thread_transmit_buffer_(*this, buffer_transfer_count, std::chrono::milliseconds(1))
         , event_thread_([this]() { handle_events(); })
-        , sync_read_thread_id_(std::this_thread::get_id())
+        , operation_thread_id_(std::this_thread::get_id())
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
         , index_to_storage_id_(index_to_storage_id) {}
 
     ~Impl() { stop_handling_events(); };
 
     void read_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id) {
+        operation_thread_check();
+
         if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
             != OperatingState::NONE)
             return;
@@ -47,6 +49,8 @@ public:
     void read_async(
         uint16_t index, uint8_t sub_index, int storage_id,
         void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
+        operation_thread_check();
+
         if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
             != OperatingState::NONE)
             throw std::runtime_error("Illegal checked read: Data is being operated!");
@@ -61,6 +65,8 @@ public:
 
     template <size_t data_size>
     void write_async_unchecked(Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id) {
+        operation_thread_check();
+
         if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
             != OperatingState::NONE)
             return;
@@ -73,6 +79,8 @@ public:
     void write_async(
         Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id,
         void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
+        operation_thread_check();
+
         if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
             != OperatingState::NONE)
             throw std::runtime_error("Illegal checked write: Data is being operated!");
@@ -88,6 +96,8 @@ public:
     }
 
     void pdo_write_async_unchecked(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
+        operation_thread_check();
+
         std::byte* buffer = fetch_pdo_buffer(default_transmit_buffer_);
         auto payload = new (buffer) protocol::pdo::Write{};
 
@@ -95,13 +105,20 @@ public:
         payload->pdo_id = 0x100;
         std::memcpy(&payload->control_positions, &control_positions, sizeof(control_positions));
         payload->timestamp = timestamp;
+
+        trigger_transmission();
     }
 
-    bool trigger_transmission() { return default_transmit_buffer_.trigger_transmission(); }
+    bool trigger_transmission() {
+        operation_thread_check();
+        return default_transmit_buffer_.trigger_transmission();
+    }
 
     Buffer8 get(int storage_id) {
         return storage_[storage_id].value.load(std::memory_order::relaxed);
     }
+
+    void disable_thread_safe_check() { operation_thread_id_ = std::thread::id{}; }
 
 private:
     enum class OperatingState : uint32_t {
@@ -119,6 +136,18 @@ private:
         std::atomic<void (*)(Buffer8 context, Buffer8 value)> callback;
         std::atomic<Buffer8> callback_context;
     };
+
+    void operation_thread_check() const {
+        if (operation_thread_id_ == std::thread::id{})
+            return;
+        if (operation_thread_id_ != std::this_thread::get_id()) [[unlikely]]
+            throw std::runtime_error(
+                "Thread safety violation: \n"
+                "  Operation must be called from the construction thread by default. \n"
+                "  If you want to perform operations in multiple threads, call:\n"
+                "      disable_thread_safe_check();\n"
+                "  And use mutex to ensure that ONLY ONE THREAD is operating at the same time.");
+    }
 
     static std::byte*
         fetch_sdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer, int size) {
@@ -364,7 +393,7 @@ private:
     AsyncTransmitBuffer<protocol::Header> event_thread_transmit_buffer_;
     std::jthread event_thread_;
 
-    const std::thread::id sync_read_thread_id_;
+    std::thread::id operation_thread_id_;
 
     std::unique_ptr<StorageUnit[]> storage_;
     int (*index_to_storage_id_)(uint16_t, uint8_t);
@@ -432,6 +461,10 @@ API bool Handler::trigger_transmission() {
 
 API Handler::Buffer8 Handler::get(int storage_id) {
     return reinterpret_cast<Impl*>(impl_)->get(storage_id);
+}
+
+API void Handler::disable_thread_safe_check() {
+    return reinterpret_cast<Impl*>(impl_)->disable_thread_safe_check();
 }
 
 } // namespace wujihandcpp::protocol

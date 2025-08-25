@@ -65,6 +65,8 @@ public:
 
     Buffer8 get(int storage_id);
 
+    void disable_thread_safe_check();
+
 private:
     class Impl;
     static constexpr size_t impl_align = 8;
