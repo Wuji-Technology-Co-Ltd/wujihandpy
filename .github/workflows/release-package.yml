@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -37,12 +39,21 @@ jobs:
       - name: List built packages
         run: find package-build/*
 
+      - name: Extract git tag & generate change log
+        run: |
+          GIT_TAG="$(git describe --tags --abbrev=0)"
+          echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
+          echo "Using git tag: $GIT_TAG"
+          docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog $GIT_TAG > changelog.md
+          cat changelog.md
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ env.GIT_TAG }}
+          name: ${{ env.GIT_TAG }}
+          body_path: changelog.md
           draft: false
           prerelease: ${{ github.ref_type != 'tag' }}
           make_latest: ${{ github.ref_type == 'tag' }}

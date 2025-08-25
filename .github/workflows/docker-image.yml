@@ -12,9 +12,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Extract image tag
         run: |
-          RAW_VERSION="${{ github.ref_name }}"
+          RAW_VERSION="$(git describe --tags --abbrev=0)"
           CLEAN_VERSION="${RAW_VERSION#v}"
           echo "IMAGE_TAG=$CLEAN_VERSION" >> $GITHUB_ENV
           echo "Using Docker image tag: $CLEAN_VERSION"
@@ -35,6 +38,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          context: .
           platforms: linux/amd64,linux/arm64
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/wujihandcpp-develop:${{ env.IMAGE_TAG }}
