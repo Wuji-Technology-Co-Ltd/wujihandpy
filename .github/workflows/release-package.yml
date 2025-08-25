@@ -33,8 +33,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           file: Dockerfile.package-builder
           outputs: type=local,dest=package-build/
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=release-build
+          cache-to: type=gha,mode=max,scope=release-build
 
       - name: List built packages
         run: find package-build/*

@@ -43,5 +43,5 @@ jobs:
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/wujihandcpp-develop:${{ env.IMAGE_TAG }}
             ${{ vars.DOCKERHUB_USERNAME }}/wujihandcpp-develop:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=docker-build
+          cache-to: type=gha,mode=max,scope=docker-build
