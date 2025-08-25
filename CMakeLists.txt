@@ -88,6 +88,29 @@ elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
 endif()
 
+# Enable LTO optimization
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION TRUE
+)
+
+option(STATIC_LINK_STDCPP "Statically link the C++ standard library" OFF)
+if(STATIC_LINK_STDCPP)
+    if(MSVC)
+        message(FATAL_ERROR "Not currently supported.")
+    else()
+        # GCC/Clang
+        target_compile_options(${PROJECT_NAME} PRIVATE
+            -fdata-sections
+            -ffunction-sections
+        )
+        target_link_options(${PROJECT_NAME} PRIVATE -static-libstdc++ -static-libgcc)
+        target_link_options(${PROJECT_NAME} PRIVATE -Wl,--exclude-libs,ALL -Wl,--gc-sections)
+    endif()
+    message(STATUS "Static linking C++ standard library")
+else()
+    message(STATUS "Dynamic linking C++ standard library")
+endif()
+
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 
@@ -110,7 +133,7 @@ if(UNIX AND NOT APPLE)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Wuji Technology <support@pan-motor.com>")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "A Lightweight C++ SDK for Wujihand")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Wuji-Technology-Co-Ltd/wujihandcpp")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0-0-dev (>= 2:1.0.23)")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0-0-dev")
     set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 
@@ -121,7 +144,7 @@ if(UNIX AND NOT APPLE)
     set(CPACK_RPM_PACKAGE_URL "https://github.com/Wuji-Technology-Co-Ltd/wujihandcpp")
     set(CPACK_RPM_PACKAGE_RELEASE "1")
     set(CPACK_RPM_PACKAGE_LICENSE "MIT")
-    set(CPACK_RPM_PACKAGE_REQUIRES "libusbx-devel >= 1.0.23")
+    set(CPACK_RPM_PACKAGE_REQUIRES "libusbx-devel")
     set(CPACK_RPM_PACKAGE_GROUP "Development/Libraries")
 
     set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}")

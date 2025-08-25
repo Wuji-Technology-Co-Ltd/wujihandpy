@@ -8,7 +8,8 @@ RUN dnf install -y libusbx libusbx-devel zip rpm-build && dnf clean all
 
 RUN --mount=type=bind,target=/source,source=.,readonly \
     mkdir /tmp/build /output && cd /tmp/build && \
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/tmp/install /source && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DSTATIC_LINK_STDCPP=ON \
+      -DCMAKE_INSTALL_PREFIX=/tmp/install /source && \
     make -j && make install && \
     cpack -j && \
     cp ./*.deb ./*.rpm /output/ && \
