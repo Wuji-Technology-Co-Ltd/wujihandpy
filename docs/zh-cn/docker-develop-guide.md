@@ -18,7 +18,7 @@ sudo apt-get update &&
 sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-其他发行版用户可自行通过 References 中的官方文档安装 Docker。
+其他发行版用户可自行通过 [References](#references) 中的官方文档安装 Docker。
 
 ### （选做）设置无需 sudo
 
@@ -53,11 +53,19 @@ sudo systemctl restart docker
 docker pull wujitechnology/wujihandcpp-develop:latest
 ```
 
+## 拉取仓库
+
+```bash
+git clone https://github.com/Wuji-Technology-Co-Ltd/wujihandcpp.git
+cd wujihandcpp
+```
+
 ## 使用 VSCode 打开仓库
+
 
 在 [VSCode](https://code.visualstudio.com/) 中安装 [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) 扩展。
 
-将 wujihand_sdk 目录用 VSCode 打开，按 Ctrl+Shift+P，点击 Dev Containers: Reopen in Container 选项。
+将仓库目录用 VSCode 打开，按 Ctrl+Shift+P，点击 Dev Containers: Reopen in Container 选项。
 
 ![Dev Containers: Reopen in Container](../images/docker-develop-guide/1.png)
 

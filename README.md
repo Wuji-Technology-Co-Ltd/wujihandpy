@@ -34,7 +34,7 @@
 
 ### libusb 1.0
 
-需安装 libusb 的运行时库：
+需安装 libusb 1.0 开发包：
 
 - Debian/Ubuntu: `sudo apt install libusb-1.0-0-dev`
 - Fedora/CentOS/RHEL: `sudo dnf install libusbx-devel`
@@ -55,7 +55,7 @@ Ubuntu 24 拥有较新的 glibc，GCC-14 支持完整的 C++20 特性，两者�
 
 ### SDK 发布包​​
 
-如果不希望使用 Docker，也可通过 Release 页面 的发布包​​进行安装。
+如果不希望使用 Docker，也可通过 [Release 页面](https://github.com/Wuji-Technology-Co-Ltd/wujihandcpp/releases) 的发布包​​进行安装。
 
 - Debian/Ubuntu: `sudo apt install ./wujihandcpp-<version>-<arch>.deb`
 
