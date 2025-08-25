@@ -21,7 +21,9 @@ class DataOperator {
     using Handler = protocol::Handler;
     using Buffer8 = protocol::Handler::Buffer8;
 
-public:
+    template <typename U>
+    friend class DataOperator;
+
     template <typename Data, typename F>
     typename std::enable_if<std::is_same<typename Data::Base, T>::value>::type iterate(F&& f) {
         T& self = *static_cast<T*>(this);
@@ -36,16 +38,23 @@ public:
             self.sub(i).template iterate<Data>(f);
     }
 
+public:
     template <typename Data>
-    typename std::enable_if<
-        std::is_same<typename Data::Base, T>::value, typename Data::ValueType>::type
-        read() {
+    SDK_CPP20_REQUIRES(Data::readable)
+    auto read() -> typename std::enable_if<
+        std::is_same<typename Data::Base, T>::value, typename Data::ValueType>::type {
+        static_assert(Data::readable, "");
+
         read<Data>();
         return get<Data>();
     }
 
     template <typename Data>
-    typename std::enable_if<!std::is_same<typename Data::Base, T>::value, void>::type read() {
+    SDK_CPP20_REQUIRES(Data::readable)
+    auto read() ->
+        typename std::enable_if<!std::is_same<typename Data::Base, T>::value, void>::type {
+        static_assert(Data::readable, "");
+
         Latch latch;
         read_async<Data>(latch);
         trigger_transmission();
@@ -53,7 +62,10 @@ public:
     }
 
     template <typename Data>
+    SDK_CPP20_REQUIRES(Data::readable)
     void read_async(Latch& latch) {
+        static_assert(Data::readable, "");
+
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
             latch.count_up();
@@ -68,10 +80,12 @@ public:
 
     template <typename Data, typename F>
     SDK_CPP20_REQUIRES(
-        sizeof(F) <= 8 && alignof(F) <= 8
+        Data::readable && sizeof(F) <= 8 && alignof(F) <= 8
         && std::is_trivially_copyable_v<F> && std::is_trivially_destructible_v<F>
         && requires(Data::ValueType value, const F& f) { f(value); })
     void read_async(const F& f) {
+        static_assert(Data::readable, "");
+
         static_assert(sizeof(F) <= 8, "");
         static_assert(alignof(F) <= 8, "");
         static_assert(std::is_trivially_copyable<F>::value, "");
@@ -94,7 +108,10 @@ public:
     // void set_data_read_callback();
 
     template <typename Data>
+    SDK_CPP20_REQUIRES(Data::readable)
     void read_async_unchecked() {
+        static_assert(Data::readable, "");
+
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&handler](uint16_t index, uint8_t sub_index, int storage_id) {
             handler.read_async_unchecked(index, sub_index, storage_id);
@@ -102,9 +119,11 @@ public:
     }
 
     template <typename Data>
-    typename std::enable_if<
-        std::is_same<typename Data::Base, T>::value, typename Data::ValueType>::type
-        get() {
+    SDK_CPP20_REQUIRES(Data::readable)
+    auto get() -> typename std::enable_if<
+        std::is_same<typename Data::Base, T>::value, typename Data::ValueType>::type {
+        static_assert(Data::readable, "");
+
         Handler& handler = static_cast<T*>(this)->handler_;
         typename Data::ValueType value;
         iterate<Data>([&](uint16_t, uint8_t, int storage_id) {
@@ -114,7 +133,10 @@ public:
     }
 
     template <typename Data>
+    SDK_CPP20_REQUIRES(Data::writable)
     void write(typename Data::ValueType value) {
+        static_assert(Data::writable, "");
+
         Latch latch;
         write_async<Data>(latch, value);
         trigger_transmission();
@@ -122,7 +144,10 @@ public:
     }
 
     template <typename Data>
+    SDK_CPP20_REQUIRES(Data::writable)
     void write_async(Latch& latch, typename Data::ValueType value) {
+        static_assert(Data::writable, "");
+
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
             latch.count_up();
@@ -137,9 +162,11 @@ public:
 
     template <typename Data, typename F>
     SDK_CPP20_REQUIRES(
-        sizeof(F) <= 8 && alignof(F) <= 8 && std::is_trivially_copyable_v<F>
+        Data::writable && sizeof(F) <= 8 && alignof(F) <= 8 && std::is_trivially_copyable_v<F>
         && std::is_trivially_destructible_v<F> && requires(const F& f) { f(); })
     void write_async(const F& f, typename Data::ValueType value) {
+        static_assert(Data::writable, "");
+
         static_assert(sizeof(F) <= 8, "");
         static_assert(alignof(F) <= 8, "");
         static_assert(std::is_trivially_copyable<F>::value, "");
@@ -155,7 +182,10 @@ public:
     }
 
     template <typename Data>
+    SDK_CPP20_REQUIRES(Data::writable)
     void write_async_unchecked(typename Data::ValueType value) {
+        static_assert(Data::writable, "");
+
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
             handler.write_async_unchecked<sizeof(value)>(
@@ -163,12 +193,12 @@ public:
         });
     }
 
+private:
     void trigger_transmission() {
         Handler& handler = static_cast<T*>(this)->handler_;
         handler.trigger_transmission();
     }
 
-private:
     template <typename U>
     constexpr static decltype(std::declval<typename U::Sub>(), int()) data_count_internal(int) {
         return T::Datas::count + T::sub_count_ * T::Sub::data_count();
@@ -179,7 +209,7 @@ private:
         return T::Datas::count;
     }
 
-public:
+protected:
     static constexpr int data_count() { return data_count_internal<T>(0); }
 };
 

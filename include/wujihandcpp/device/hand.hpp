@@ -39,6 +39,8 @@ public:
         handler_.pdo_write_async_unchecked(control_positions, timestamp);
     }
 
+    void trigger_transmission() { handler_.trigger_transmission(); }
+
 private:
     using Datas = DataTuple<
         data::hand::FirmwareVersion, data::hand::FirmwareDate, data::hand::SystemTime,
