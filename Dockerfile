@@ -14,12 +14,13 @@ ENV TZ=Etc/UTC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     vim wget curl unzip \
+    gnupg2 ca-certificates \
     zsh usbutils \
     libusb-1.0-0-dev \
     libc6-dev gcc-14 g++-14 \
     cmake make ninja-build \
     openssh-client \
-    git sudo software-properties-common && \
+    git sudo && \
     apt-get autoremove -y && apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 50 && \
@@ -29,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install latest clangd
 RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc && \
-    add-apt-repository -y "deb https://apt.llvm.org/noble/ llvm-toolchain-noble main" && \
+    echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble main" > /etc/apt/sources.list.d/llvm.list && \
     apt-get update && \
     version=`apt-cache search clangd- | grep clangd- | awk -F' ' '{print $1}' | sort -V | tail -1 | cut -d- -f2` && \
     apt-get install -y --no-install-recommends clangd-$version && \
@@ -47,8 +48,8 @@ RUN --mount=type=bind,target=/wujihandcpp,source=.,readonly \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
 # For CN user: use command below to replace apt source with tsinghua mirror
-# > sudo cp /etc/apt/sources.list.d/ubuntu.sources.cn /etc/apt/sources.list.d/ubuntu.sources
-COPY <<EOF /etc/apt/sources.list.d/ubuntu.sources.cn
+# > sudo cp /etc/apt/sources.list.d/ubuntu.sources.cn.bak /etc/apt/sources.list.d/ubuntu.sources
+COPY <<EOF /etc/apt/sources.list.d/ubuntu.sources.cn.bak
 Types: deb
 URIs: http://mirrors.tuna.tsinghua.edu.cn/ubuntu/
 Suites: noble noble-updates noble-security
