@@ -62,6 +62,13 @@ public:
     }
 
     template <typename Data>
+    void read_async_unchecked() {
+        hand_.read_async_unchecked<Data>();
+    }
+
+    void trigger_transmission() { hand_.trigger_transmission(); }
+
+    template <typename Data>
     requires(std::is_same_v<typename Data::Base, wujihandcpp::device::Hand>) auto get() {
         return py::numpy_scalar{hand_.get<Data>()};
     }
@@ -83,6 +90,9 @@ public:
     static void register_py_interface(py::class_<Hand>& py_class, const std::string& name) {
         py_class.def(("read_" + name).c_str(), &Hand::read<Data>);
         py_class.def(("read_" + name + "_async").c_str(), &Hand::read_async<Data>);
+        py_class.def(
+            ("read_" + name + "_async_unchecked").c_str(), &Hand::read_async_unchecked<Data>);
+        py_class.def(("get_" + name).c_str(), &Hand::get<Data>);
     }
 
 private:
@@ -117,7 +127,7 @@ PYBIND11_MODULE(wujihandpy, m) {
     auto hand = py::class_<Hand>(m, "Hand");
     hand.def(
         py::init<uint16_t, int32_t>(), py::arg("usb_vid") = 0x0483, py::arg("usb_pid") = 0x5740);
-        
+
     Hand::register_py_interface<wujihandcpp::data::hand::FirmwareVersion>(hand, "firmware_version");
     Hand::register_py_interface<wujihandcpp::data::hand::FirmwareDate>(hand, "firmware_date");
     Hand::register_py_interface<wujihandcpp::data::hand::SystemTime>(hand, "system_time");
@@ -125,6 +135,8 @@ PYBIND11_MODULE(wujihandpy, m) {
     Hand::register_py_interface<wujihandcpp::data::hand::InputVoltage>(hand, "input_voltage");
 
     Hand::register_py_interface<wujihandcpp::data::joint::Position>(hand, "joint_position");
+
+    hand.def("trigger_transmission", &Hand::trigger_transmission);
 
 #define STRINGIFY(x) #x
 #ifdef VERSION_INFO
