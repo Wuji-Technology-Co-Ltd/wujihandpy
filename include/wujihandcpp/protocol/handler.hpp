@@ -30,9 +30,7 @@ public:
 
         template <typename T>
         remove_cvref_t<T> as() const {
-            remove_cvref_t<T> out;
-            std::memcpy(&out, storage, sizeof(out));
-            return out;
+            return *reinterpret_cast<const remove_cvref_t<T>*>(storage);
         }
 
         alignas(8) uint8_t storage[8];
