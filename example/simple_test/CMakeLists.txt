@@ -30,24 +30,6 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Set libusb binaries directory (if provided)
-set(LIBUSB_BINARY_PATH "" CACHE STRING "Path to libusb binaries directory")
-if(NOT LIBUSB_BINARY_PATH STREQUAL "")
-    message(STATUS "Using libusb binary from: ${LIBUSB_BINARY_PATH}")
-    link_directories(${LIBUSB_BINARY_PATH})
-endif()
-
-# Set libusb header files directory (if provided)
-if(UNIX)
-    set(LIBUSB_HEADER_PATH "/usr/include/libusb-1.0" CACHE STRING "Path to libusb header files directory")
-else()
-    set(LIBUSB_HEADER_PATH "" CACHE STRING "Path to libusb header files directory")
-endif()
-if(NOT LIBUSB_HEADER_PATH STREQUAL "")
-    message(STATUS "Using libusb header from: ${LIBUSB_HEADER_PATH}")
-    include_directories(SYSTEM ${LIBUSB_HEADER_PATH})
-endif()
-
 # Get project sources
 file(GLOB_RECURSE PROJECT_SOURCE CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.cpp
@@ -60,11 +42,5 @@ add_executable(
 )
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
-
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE libusb-1.0)
-elseif(UNIX)
-    target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
-endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE wujihandcpp)
