@@ -1,14 +1,14 @@
 #pragma once
 
-#include <cstdint>
-
 #include <atomic>
+#include <stdexcept>
 #include <type_traits>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/data/joint.hpp>
+#include <wujihandcpp/device/latch.hpp>
 
 namespace py = pybind11;
 
@@ -65,9 +65,37 @@ public:
     }
 
     template <typename Data>
-    auto write(py::numpy_scalar<typename Data::ValueType> value) {
+    void write(py::numpy_scalar<typename Data::ValueType> value) {
         py::gil_scoped_release release;
         T::template write<Data>(value.value);
+    }
+
+    template <typename Data>
+    void write(py::array_t<typename Data::ValueType> array) {
+        py::gil_scoped_release release;
+        wujihandcpp::device::Latch latch;
+
+        if constexpr (
+            std::is_same_v<T, wujihandcpp::device::Finger>
+            && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
+            if (array.ndim() != 1 || array.shape()[1] != 4)
+                throw std::runtime_error("Array shape must be {4}!");
+            auto r = array.template unchecked<1>();
+            for (ssize_t j = 0; j < 4; j++)
+                T::joint(j).template write_async<Data>(latch, r(j));
+        } else if constexpr (
+            std::is_same_v<T, wujihandcpp::device::Hand>
+            && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
+            if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
+                throw std::runtime_error("Array shape must be {5, 4}!");
+            auto r = array.template unchecked<2>();
+            for (ssize_t i = 0; i < 5; i++)
+                for (ssize_t j = 0; j < 4; j++)
+                    T::finger(i).joint(j).template write_async<Data>(latch, r(i, j));
+        }
+
+        T::trigger_transmission();
+        latch.wait();
     }
 
     template <typename Data>
@@ -88,8 +116,65 @@ public:
     }
 
     template <typename Data>
+    py::object write_async(py::array_t<typename Data::ValueType> array) {
+        auto context = new FutureContext{*this, data_count<Data>()};
+
+        auto callback = [context]() {
+            if (context->count_down()) {
+                py::gil_scoped_acquire acquire;
+                context->call_threadsafe(context->future.attr("set_result"), py::none());
+                delete context;
+            }
+        };
+
+        if constexpr (
+            std::is_same_v<T, wujihandcpp::device::Finger>
+            && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
+            if (array.ndim() != 1 || array.shape()[1] != 4)
+                throw std::runtime_error("Array shape must be {4}!");
+            auto r = array.template unchecked<1>();
+            for (ssize_t j = 0; j < 4; j++)
+                T::joint(j).template write_async<Data>(callback, r(j));
+        } else if constexpr (
+            std::is_same_v<T, wujihandcpp::device::Hand>
+            && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
+            if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
+                throw std::runtime_error("Array shape must be {5, 4}!");
+            auto r = array.template unchecked<2>();
+            for (ssize_t i = 0; i < 5; i++)
+                for (ssize_t j = 0; j < 4; j++)
+                    T::finger(i).joint(j).template write_async<Data>(callback, r(i, j));
+        }
+        T::trigger_transmission();
+
+        return context->future;
+    }
+
+    template <typename Data>
     void write_async_unchecked(py::numpy_scalar<typename Data::ValueType> value) {
         T::template write_async_unchecked<Data>(value.value);
+    }
+
+    template <typename Data>
+    void write_async_unchecked(py::array_t<typename Data::ValueType> array) {
+        if constexpr (
+            std::is_same_v<T, wujihandcpp::device::Finger>
+            && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
+            if (array.ndim() != 1 || array.shape()[1] != 4)
+                throw std::runtime_error("Array shape must be {4}!");
+            auto r = array.template unchecked<1>();
+            for (ssize_t j = 0; j < 4; j++)
+                T::joint(j).template write_async_unchecked<Data>(r(j));
+        } else if constexpr (
+            std::is_same_v<T, wujihandcpp::device::Hand>
+            && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
+            if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
+                throw std::runtime_error("Array shape must be {5, 4}!");
+            auto r = array.template unchecked<2>();
+            for (ssize_t i = 0; i < 5; i++)
+                for (ssize_t j = 0; j < 4; j++)
+                    T::finger(i).joint(j).template write_async_unchecked<Data>(r(i, j));
+        }
     }
 
     void trigger_transmission() { T::trigger_transmission(); }
@@ -140,10 +225,27 @@ public:
             py_class.def(("get_" + name).c_str(), &Wrapper::get<Data>);
         }
         if constexpr (Data::writable) {
-            py_class.def(("write_" + name).c_str(), &Wrapper::write<Data>);
-            py_class.def(("write_" + name + "_async").c_str(), &Wrapper::write_async<Data>);
+            using V = Data::ValueType;
             py_class.def(
-                ("write_" + name + "_unchecked").c_str(), &Wrapper::write_async_unchecked<Data>);
+                ("write_" + name).c_str(),
+                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write<Data>));
+            py_class.def(
+                ("write_" + name + "_async").c_str(),
+                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async<Data>));
+            py_class.def(
+                ("write_" + name + "_unchecked").c_str(),
+                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async_unchecked<Data>));
+            if constexpr (!std::is_same_v<typename Data::Base, T>) {
+                py_class.def(
+                    ("write_" + name).c_str(),
+                    py::overload_cast<py::array_t<V>>(&Wrapper::write<Data>));
+                py_class.def(
+                    ("write_" + name + "_async").c_str(),
+                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async<Data>));
+                py_class.def(
+                    ("write_" + name + "_unchecked").c_str(),
+                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async_unchecked<Data>));
+            }
         }
     }
 

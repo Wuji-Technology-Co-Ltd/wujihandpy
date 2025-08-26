@@ -14,10 +14,10 @@ def main():
 
 
 def run(hand: wujihandpy.Hand):
-    # Set control mode
+    # Set control mode (bulk-write)
     hand.write_joint_control_mode(np.uint16(2))
 
-    # Enable whole hand
+    # Enable whole hand (also bulk-write)
     hand.write_joint_control_word(np.uint16(1))
 
     # Return all joints to initial point
@@ -39,6 +39,10 @@ def run(hand: wujihandpy.Hand):
 
     # Disable the thumb
     hand.finger(0).write_joint_control_word(np.uint16(5))
+
+    # Disable each J2
+    for i in range(1, 5):
+        hand.finger(i).joint(1).write_joint_control_word(np.uint16(5))
 
     # 1kHz SDO Control
     update_rate = 1000.0
