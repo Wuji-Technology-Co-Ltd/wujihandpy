@@ -274,6 +274,15 @@ private:
         auto& storage = storage_[storage_id];
 
         auto operating_state = storage.operating_state.load(std::memory_order::acquire);
+
+        if (operating_state != OperatingState::WRITING_CONFIRMING) {
+            storage.value.store(Buffer8{data.value}, std::memory_order::relaxed);
+            auto new_version = storage.version.load(std::memory_order::relaxed) + 1;
+            if (new_version == 0)
+                new_version = 1;
+            storage.version.store(new_version, std::memory_order::release);
+        }
+
         if (operating_state != OperatingState::NONE) {
             if (operating_state == OperatingState::READING) {
                 complete_operation(storage, Buffer8{data.value});
@@ -288,15 +297,8 @@ private:
                         storage.value.load(std::memory_order::relaxed).as<T>(), data.header.index,
                         data.header.sub_index);
                 }
-                return;
             }
         }
-
-        storage.value.store(Buffer8{data.value}, std::memory_order::relaxed);
-        auto new_version = storage.version.load(std::memory_order::relaxed) + 1;
-        if (new_version == 0)
-            new_version = 1;
-        storage.version.store(new_version, std::memory_order::release);
     }
 
     void read_sdo_operation_read_failed(std::byte*& pointer) {
