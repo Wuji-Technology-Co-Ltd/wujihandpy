@@ -45,7 +45,10 @@ public:
         std::is_same<typename Data::Base, T>::value, typename Data::ValueType>::type {
         static_assert(Data::readable, "");
 
-        read<Data>();
+        Latch latch;
+        read_async<Data>(latch);
+        trigger_transmission();
+        latch.wait();
         return get<Data>();
     }
 
