@@ -38,8 +38,6 @@ public:
         handler_.pdo_write_async_unchecked(control_positions, timestamp);
     }
 
-    void trigger_transmission() { handler_.trigger_transmission(); }
-
     void disable_thread_safe_check() { handler_.disable_thread_safe_check(); }
 
 private:

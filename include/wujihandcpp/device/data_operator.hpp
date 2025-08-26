@@ -196,12 +196,12 @@ public:
         });
     }
 
-private:
     void trigger_transmission() {
         Handler& handler = static_cast<T*>(this)->handler_;
         handler.trigger_transmission();
     }
 
+private:
     template <typename U>
     constexpr static decltype(std::declval<typename U::Sub>(), int()) data_count_internal(int) {
         return T::Datas::count + T::sub_count_ * T::Sub::data_count();
