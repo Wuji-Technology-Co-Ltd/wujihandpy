@@ -7,4 +7,4 @@ name = "wujihandpy"
 version = "0.0.2"
 description = "Python bindings for WujiHandCpp"
 authors = [{name = "Wuji Technology <support@pan-motor.com>"}]
-dependencies = []
+dependencies = ["numpy"]

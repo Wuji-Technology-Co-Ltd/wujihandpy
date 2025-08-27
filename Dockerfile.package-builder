@@ -1,0 +1,32 @@
+ARG TARGETARCH
+ARG TARGETARCH_REPLACED=${TARGETARCH/amd64/x86_64}
+ARG TARGETARCH_REPLACED=${TARGETARCH_REPLACED/arm64/aarch64}
+
+FROM quay.io/pypa/manylinux_2_28_${TARGETARCH_REPLACED} AS build
+
+RUN dnf install -y libusbx libusbx-devel zip && dnf clean all
+
+RUN --mount=type=bind,target=/source,source=wujihandcpp,readonly \
+    mkdir /tmp/build && cd /tmp/build && \
+    cmake -DCMAKE_BUILD_TYPE=Release /source && \
+    make -j && make install && \
+    rm -rf /tmp/*
+
+RUN --mount=type=bind,target=/source,source=.,readonly \
+    set -euo pipefail; \
+    mkdir /output; \
+    cp -r /source /tmp/source && cd /tmp/source; \
+    for PYBIN in /opt/python/cp3*/bin; do \
+        echo ">>> Building with $PYBIN"; \
+        $PYBIN/pip install -U pip build auditwheel scikit-build-core pybind11; \
+        rm -rf build dist *.egg-info; \
+        $PYBIN/python -m build --wheel; \
+        ls -al; \
+        for whl in dist/*.whl; do \
+            auditwheel repair $whl -w /output/; \
+        done; \
+    done; \
+    rm -rf /tmp/*
+
+FROM scratch
+COPY --from=build /output/* /

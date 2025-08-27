@@ -4,6 +4,7 @@
 .venv/
 
 build/
+package-build/
 dist/
 _build/
 _generate/
