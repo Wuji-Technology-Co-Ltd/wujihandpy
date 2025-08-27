@@ -63,6 +63,7 @@ public:
     template <typename Data>
     void read_async_unchecked() {
         T::template read_async_unchecked<Data>();
+        T::trigger_transmission();
     }
 
     template <typename Data>
@@ -154,6 +155,7 @@ public:
     template <typename Data>
     void write_async_unchecked(py::numpy_scalar<typename Data::ValueType> value) {
         T::template write_async_unchecked<Data>(value.value);
+        T::trigger_transmission();
     }
 
     template <typename Data>
@@ -176,6 +178,7 @@ public:
                 for (ssize_t j = 0; j < 4; j++)
                     T::finger(i).joint(j).template write_async_unchecked<Data>(r(i, j));
         }
+        T::trigger_transmission();
     }
 
     void trigger_transmission() { T::trigger_transmission(); }

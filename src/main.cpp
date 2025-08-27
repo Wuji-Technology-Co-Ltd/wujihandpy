@@ -33,8 +33,6 @@ PYBIND11_MODULE(_core, m) {
 
     hand.def("pdo_write_unchecked", &Hand::pdo_write_unchecked);
 
-    hand.def("trigger_transmission", &Hand::trigger_transmission);
-
     using Finger = Wrapper<wujihandcpp::device::Finger>;
     auto finger = py::class_<Finger>(m, "Finger");
     hand.def("finger", &Hand::finger, py::arg("index"));
@@ -45,8 +43,6 @@ PYBIND11_MODULE(_core, m) {
     Finger::register_py_interface<data::joint::Position>(finger, "joint_position");
     Finger::register_py_interface<data::joint::ControlPosition>(finger, "joint_control_position");
 
-    finger.def("trigger_transmission", &Finger::trigger_transmission);
-
     using Joint = Wrapper<wujihandcpp::device::Joint>;
     auto joint = py::class_<Joint>(m, "Joint");
     finger.def("joint", &Finger::joint, py::arg("index"));
@@ -56,6 +52,4 @@ PYBIND11_MODULE(_core, m) {
     Joint::register_py_interface<data::joint::ControlWord>(joint, "joint_control_word");
     Joint::register_py_interface<data::joint::Position>(joint, "joint_position");
     Joint::register_py_interface<data::joint::ControlPosition>(joint, "joint_control_position");
-
-    finger.def("trigger_transmission", &Finger::trigger_transmission);
 }

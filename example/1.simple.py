@@ -56,17 +56,14 @@ def run(hand: wujihandpy.Hand):
         x += math.pi / update_rate
         y = (math.cos(x) + 1.0) / 2.0
 
-        flex_pos = np.int32(round(0xFFFFFF * y))
-        extend_pos = np.int32(0xFFFFFF - flex_pos)
+        pos_increase = np.int32(round(0xFFFFFF * y))
+        pos_decrease = np.int32(0xFFFFFF - pos_increase)
 
         # Control index finger
         # Unchecked API is non-blocking (returns immediately, but success is not guaranteed)
-        hand.finger(1).joint(0).write_joint_control_position_unchecked(flex_pos)
-        hand.finger(1).joint(2).write_joint_control_position_unchecked(extend_pos)
-        hand.finger(1).joint(3).write_joint_control_position_unchecked(extend_pos)
-
-        # Unchecked API requires explicit triggering to save bandwidth
-        hand.trigger_transmission()
+        hand.finger(1).joint(0).write_joint_control_position_unchecked(pos_increase)
+        hand.finger(1).joint(2).write_joint_control_position_unchecked(pos_decrease)
+        hand.finger(1).joint(3).write_joint_control_position_unchecked(pos_decrease)
 
         time.sleep(update_period)
 

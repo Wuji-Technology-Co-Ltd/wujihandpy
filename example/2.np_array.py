@@ -54,18 +54,17 @@ def run(hand: wujihandpy.Hand):
         x += math.pi / update_rate
         y = (math.cos(x) + 1.0) / 2.0
 
-        flex_pos = np.int32(round(0xFFFFFF * y))
-        extend_pos = np.int32(0xFFFFFF - flex_pos)
+        pos_increase = np.int32(round(0xFFFFFF * y))
+        pos_decrease = np.int32(0xFFFFFF - pos_increase)
 
         # Control index finger
         hand.finger(1).write_joint_control_position_unchecked(
             np.array(
-                #   J1    J2      J3          J4
-                [flex_pos, 0, extend_pos, extend_pos],
+                #     J1      J2       J3            J4
+                [pos_increase, 0, pos_decrease, pos_decrease],
                 dtype=np.int32,
             )
         )
-        hand.trigger_transmission()
 
         time.sleep(update_period)
 
