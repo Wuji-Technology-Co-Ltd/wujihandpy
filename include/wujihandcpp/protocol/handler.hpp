@@ -26,7 +26,7 @@ public:
                     && std::is_trivially_destructible<remove_cvref_t<T>>::value,
                 "");
             new (storage) remove_cvref_t<T>{value};
-        };
+        }
 
         template <typename T>
         remove_cvref_t<T> as() const {
