@@ -7,8 +7,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(wujihandpy, m) {
-    m.attr("__name__") = "wujihandpy";
+PYBIND11_MODULE(_core, m) {
     using namespace wujihandcpp;
 
     using Hand = Wrapper<wujihandcpp::device::Hand>;

@@ -38,12 +38,14 @@ file(GLOB_RECURSE PROJECT_SOURCE CONFIGURE_DEPENDS
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
-add_subdirectory(pybind11)
-pybind11_add_module(${PROJECT_NAME} ${PROJECT_SOURCE})
+find_package(pybind11 CONFIG REQUIRED)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE wujihandcpp)
+pybind11_add_module(_core ${PROJECT_SOURCE})
 
-# EXAMPLE_VERSION_INFO is defined by setup.py and passed into the C++ code as a
-# define (VERSION_INFO) here.
-target_compile_definitions(${PROJECT_NAME}
-    PRIVATE VERSION_INFO=${EXAMPLE_VERSION_INFO})
+target_link_libraries(_core PRIVATE pybind11::headers)
+target_link_libraries(_core PRIVATE wujihandcpp)
+
+target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
+
+# The install directory is the output (wheel) directory
+install(TARGETS _core DESTINATION wujihandpy)

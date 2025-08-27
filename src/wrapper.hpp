@@ -228,23 +228,28 @@ public:
             using V = Data::ValueType;
             py_class.def(
                 ("write_" + name).c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write<Data>));
+                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write<Data>), py::arg("value"));
             py_class.def(
                 ("write_" + name + "_async").c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async<Data>));
+                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async<Data>),
+                py::arg("value"));
             py_class.def(
                 ("write_" + name + "_unchecked").c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async_unchecked<Data>));
+                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async_unchecked<Data>),
+                py::arg("value"));
             if constexpr (!std::is_same_v<typename Data::Base, T>) {
                 py_class.def(
                     ("write_" + name).c_str(),
-                    py::overload_cast<py::array_t<V>>(&Wrapper::write<Data>));
+                    py::overload_cast<py::array_t<V>>(&Wrapper::write<Data>),
+                    py::arg("value_array"));
                 py_class.def(
                     ("write_" + name + "_async").c_str(),
-                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async<Data>));
+                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async<Data>),
+                    py::arg("value_array"));
                 py_class.def(
                     ("write_" + name + "_unchecked").c_str(),
-                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async_unchecked<Data>));
+                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async_unchecked<Data>),
+                    py::arg("value_array"));
             }
         }
     }
