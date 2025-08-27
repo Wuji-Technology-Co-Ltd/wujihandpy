@@ -14,10 +14,15 @@ def main():
 
 
 def run(hand: wujihandpy.Hand):
-    # Set control mode (bulk-write)
+    # (bulk-write) Set control mode to PP (Point to Point Mode)
+    # Equals to:
+    # for i in range (0, 5):
+    #     for j in range (0, 4):
+    #         hand.finger(i).joint(j).write_joint_control_mode(np.uint16(2))
+    # Normal APIs are blocking to ensure successful operations
     hand.write_joint_control_mode(np.uint16(2))
 
-    # Enable whole hand (also bulk-write)
+    # (also bulk-write) Enable whole hand
     hand.write_joint_control_word(np.uint16(1))
 
     # Return all joints to initial point
@@ -50,14 +55,17 @@ def run(hand: wujihandpy.Hand):
     while True:
         x += math.pi / update_rate
         y = (math.cos(x) + 1.0) / 2.0
-        
+
         flex_pos = np.int32(round(0xFFFFFF * y))
         extend_pos = np.int32(0xFFFFFF - flex_pos)
 
         # Control index finger
+        # Unchecked API is non-blocking (returns immediately, but success is not guaranteed)
         hand.finger(1).joint(0).write_joint_control_position_unchecked(flex_pos)
         hand.finger(1).joint(2).write_joint_control_position_unchecked(extend_pos)
         hand.finger(1).joint(3).write_joint_control_position_unchecked(extend_pos)
+
+        # Unchecked API requires explicit triggering to save bandwidth
         hand.trigger_transmission()
 
         time.sleep(update_period)
