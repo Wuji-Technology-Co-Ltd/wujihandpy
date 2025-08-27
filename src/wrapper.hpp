@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <stdexcept>
 #include <type_traits>
 
@@ -213,6 +214,18 @@ public:
         py::capsule free(buffer, [](void* ptr) { delete[] static_cast<ValueType*>(ptr); });
 
         return py::array_t<ValueType>({5, 4}, buffer, free);
+    }
+
+    void pdo_write_unchecked(const py::array_t<int32_t>& array) {
+        if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
+            throw std::runtime_error("Array shape must be {5, 4}!");
+
+        static std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - begin);
+        auto control_positions = reinterpret_cast<const int32_t (*)[5][4]>(array.request().ptr);
+
+        T::pdo_write_async_unchecked(*control_positions, static_cast<uint32_t>(duration.count()));
     }
 
     template <typename Data>

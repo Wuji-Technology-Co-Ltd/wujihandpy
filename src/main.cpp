@@ -23,13 +23,15 @@ PYBIND11_MODULE(_core, m) {
 
     Hand::register_py_interface<data::hand::PdoEnabled>(hand, "pdo_enabled");
     Hand::register_py_interface<data::hand::GlobalTpdoId>(hand, "global_tpdo_id");
-    Hand::register_py_interface<data::hand::JointPdoInterval>(hand, "joint_pdo_interval");
+    Hand::register_py_interface<data::hand::JointPdoInterval>(hand, "pdo_interval");
 
     Hand::register_py_interface<data::joint::ControlMode>(hand, "joint_control_mode");
     Hand::register_py_interface<data::joint::SinLevel>(hand, "joint_sin_level");
     Hand::register_py_interface<data::joint::ControlWord>(hand, "joint_control_word");
     Hand::register_py_interface<data::joint::Position>(hand, "joint_position");
     Hand::register_py_interface<data::joint::ControlPosition>(hand, "joint_control_position");
+
+    hand.def("pdo_write_unchecked", &Hand::pdo_write_unchecked);
 
     hand.def("trigger_transmission", &Hand::trigger_transmission);
 
