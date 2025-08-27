@@ -4,7 +4,14 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "wujihandpy"
-version = "0.0.2"
-description = "Python bindings for WujiHandCpp"
-authors = [{name = "Wuji Technology <support@pan-motor.com>"}]
+dynamic = ["version"]
+description = "Python binding for WujiHandCpp"
+authors = [{name = "Wuji Technology", email = "support@pan-motor.com"}]
 dependencies = ["numpy"]
+
+[tool.scikit-build]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+sdist.include = ["src/wujihandpy/_version.py"]
+
+[tool.setuptools_scm]
+write_to = "src/wujihandpy/_version.py"

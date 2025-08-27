@@ -56,11 +56,4 @@ PYBIND11_MODULE(_core, m) {
     Joint::register_py_interface<data::joint::ControlPosition>(joint, "joint_control_position");
 
     finger.def("trigger_transmission", &Finger::trigger_transmission);
-
-#define STRINGIFY(x) #x
-#ifdef VERSION_INFO
-    m.attr("__version__") = STRINGIFY(VERSION_INFO);
-#else
-    m.attr("__version__") = "dev";
-#endif
 }

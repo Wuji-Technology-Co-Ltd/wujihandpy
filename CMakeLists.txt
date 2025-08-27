@@ -45,7 +45,5 @@ pybind11_add_module(_core ${PROJECT_SOURCE})
 target_link_libraries(_core PRIVATE pybind11::headers)
 target_link_libraries(_core PRIVATE wujihandcpp)
 
-target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
-
 # The install directory is the output (wheel) directory
 install(TARGETS _core DESTINATION wujihandpy)
