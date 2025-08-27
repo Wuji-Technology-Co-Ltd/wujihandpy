@@ -30,34 +30,34 @@ def run(hand: wujihandpy.Hand):
     hand.finger(3).joint(1).write_joint_control_position(np.int32(0x600000))
     hand.finger(4).joint(1).write_joint_control_position(np.int32(0x400000))
     for i in range(1, 5):
-        hand.finger(i).joint(0).write_joint_control_position(np.int32(0xFFFFFF))
-        hand.finger(i).joint(2).write_joint_control_position(np.int32(0x000000))
-        hand.finger(i).joint(3).write_joint_control_position(np.int32(0x000000))
+        hand.finger(i).joint(0).write_joint_control_position(np.int32(0xDFFFFF))
+        hand.finger(i).joint(2).write_joint_control_position(np.int32(0x400000))
+        hand.finger(i).joint(3).write_joint_control_position(np.int32(0x600000))
 
     # Wait for joints to move into place
     time.sleep(0.5)
 
-    # Disable the thumb
-    hand.finger(0).write_joint_control_word(np.uint16(5))
+    # Disable non-index fingers
+    for i in range(0, 5):
+        if i != 1:
+            hand.finger(i).write_joint_control_word(np.uint16(5))
 
-    # Disable each J2
-    for i in range(1, 5):
-        hand.finger(i).joint(1).write_joint_control_word(np.uint16(5))
-
-    # 1kHz SDO Control
-    update_rate = 1000.0
+    # 2Hz SDO Control
+    update_rate = 2.0
     update_period = 1.0 / update_rate
 
     x = 0.0
     while True:
-        x += 0.005
+        x += math.pi / update_rate
         y = (math.cos(x) + 1.0) / 2.0
-        pos = np.int32(round(0xFFFFFF * y))
-        pos_reverse = np.int32(0xFFFFFF - pos)
-        for i in range(1, 5):
-            hand.finger(i).joint(0).write_joint_control_position_unchecked(pos)
-            hand.finger(i).joint(2).write_joint_control_position_unchecked(pos_reverse)
-            hand.finger(i).joint(3).write_joint_control_position_unchecked(pos_reverse)
+        
+        flex_pos = np.int32(round(0xFFFFFF * y))
+        extend_pos = np.int32(0xFFFFFF - flex_pos)
+
+        # Control index finger
+        hand.finger(1).joint(0).write_joint_control_position_unchecked(flex_pos)
+        hand.finger(1).joint(2).write_joint_control_position_unchecked(extend_pos)
+        hand.finger(1).joint(3).write_joint_control_position_unchecked(extend_pos)
         hand.trigger_transmission()
 
         time.sleep(update_period)

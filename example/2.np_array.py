@@ -26,10 +26,10 @@ def run(hand: wujihandpy.Hand):
             [
                 #   J1        J2        J3        J4
                 [0x200000, 0x200000, 0x200000, 0x200000],  # F1
-                [0xFFFFFF, 0xBFFFFF, 0x000000, 0x000000],  # F2
-                [0xFFFFFF, 0x900000, 0x000000, 0x000000],  # F3
-                [0xFFFFFF, 0x600000, 0x000000, 0x000000],  # F4
-                [0xFFFFFF, 0x400000, 0x000000, 0x000000],  # F5
+                [0xDFFFFF, 0xBFFFFF, 0x400000, 0x600000],  # F2
+                [0xDFFFFF, 0x900000, 0x400000, 0x600000],  # F3
+                [0xDFFFFF, 0x600000, 0x400000, 0x600000],  # F4
+                [0xDFFFFF, 0x400000, 0x400000, 0x600000],  # F5
             ],
             dtype=np.int32,
         )
@@ -45,31 +45,26 @@ def run(hand: wujihandpy.Hand):
     for i in range(1, 5):
         hand.finger(i).joint(1).write_joint_control_word(np.uint16(5))
 
-    # 1kHz SDO Control
-    update_rate = 1000.0
+    # 2Hz SDO Control
+    update_rate = 2.0
     update_period = 1.0 / update_rate
 
     x = 0.0
     while True:
-        x += 0.005
+        x += math.pi / update_rate
         y = (math.cos(x) + 1.0) / 2.0
 
         flex_pos = np.int32(round(0xFFFFFF * y))
         extend_pos = np.int32(0xFFFFFF - flex_pos)
 
-        hand.write_joint_control_position_unchecked(
+        # Control index finger
+        hand.finger(1).write_joint_control_position_unchecked(
             np.array(
-                [
-                    [0, 0, 0, 0],
-                    [flex_pos, 0, extend_pos, extend_pos],
-                    [flex_pos, 0, extend_pos, extend_pos],
-                    [flex_pos, 0, extend_pos, extend_pos],
-                    [flex_pos, 0, extend_pos, extend_pos],
-                ],
+                #   J1    J2      J3          J4
+                [flex_pos, 0, extend_pos, extend_pos],
                 dtype=np.int32,
             )
         )
-
         hand.trigger_transmission()
 
         time.sleep(update_period)
