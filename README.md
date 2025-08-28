@@ -6,7 +6,7 @@ WujihandPy 是 [WujiHandCpp](https://github.com/Wuji-Technology-Co-Ltd/wujihandc
 
 ## 安装
 
-已发布至 PyPI，使用 pip 安装即可：
+WujihandPy 支持 pip 一键安装：
 
 ```bash
 pip install wujihandpy
