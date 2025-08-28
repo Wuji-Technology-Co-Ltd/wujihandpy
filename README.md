@@ -95,7 +95,7 @@ LDFLAGS += -lwujihandcpp
 ### 引入头文件
 
 ```cpp
-#include <wujihandcpp/data/hand.hpp>   // For data types
+#include <wujihandcpp/data/data.hpp>   // For data types
 #include <wujihandcpp/device/hand.hpp> // For hand device
 ```
 
