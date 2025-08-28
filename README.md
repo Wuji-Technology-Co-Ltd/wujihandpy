@@ -4,11 +4,9 @@ WujihandPy 是 [WujiHandCpp](https://github.com/Wuji-Technology-Co-Ltd/wujihandc
 
 提供更简洁、更高效、更易用的接口与灵巧手设备进行交互。
 
-要使用旧版本 SDK（不建议），请前往 [wujihand_sdk](https://github.com/Wuji-Technology-Co-Ltd/wujihand_sdk)。
-
 ## 安装
 
-已上传至 PyPI，使用 pip 安装即可：
+已发布至 PyPI，使用 pip 安装即可：
 
 ```bash
 pip install wujihandpy
@@ -25,8 +23,8 @@ sudo udevadm trigger
 
 ## 支持的 CPU 架构
 
-- x86_64 (AMD64)
-- ARM64 (aarch64)
+- x86_64
+- ARM64
 
 ## 最低系统要求 (Linux)
 
