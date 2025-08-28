@@ -54,6 +54,10 @@ sudo udevadm trigger
 
 WujihandPy 目前暂不支持 Windows，我们会尽快推进相关支持。
 
+## 示例代码
+
+所有示例代码均位于 [example](example) 目录下。
+
 ## 部分参考 API
 
 ### 导入模块
