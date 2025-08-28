@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "wujihandpy"
 dynamic = ["version"]
-description = "Python binding for WujiHandCpp"
+description = "Python bindings for WujiHandCpp"
 authors = [{name = "Wuji Technology", email = "support@pan-motor.com"}]
 dependencies = ["numpy"]
 
