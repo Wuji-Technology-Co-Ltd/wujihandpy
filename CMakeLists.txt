@@ -38,6 +38,7 @@ file(GLOB_RECURSE PROJECT_SOURCE CONFIGURE_DEPENDS
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
+set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(_core ${PROJECT_SOURCE})
