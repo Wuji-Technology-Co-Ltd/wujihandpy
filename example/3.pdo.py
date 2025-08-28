@@ -42,7 +42,7 @@ def run(hand: wujihandpy.Hand):
     time.sleep(0.1)
 
     # Disable the entire hand
-    # Switching mode requires disabling then enabling
+    # Switching mode requires re-enabling
     hand.write_joint_control_word(np.uint16(5))
 
     # Switch to CSP (Cyclic Synchronous Position) mode & Enable PDO Control
@@ -59,7 +59,7 @@ def run(hand: wujihandpy.Hand):
     for i in range(1, 5):
         hand.finger(i).joint(1).write_joint_control_word(np.uint16(5))
 
-    # 1kHz SDO Control
+    # 1kHz PDO Control
     update_rate = 1000.0
     update_period = 1.0 / update_rate
 
