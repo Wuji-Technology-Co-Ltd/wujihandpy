@@ -8,7 +8,7 @@ WujihandPy 是 [WujiHandCpp](https://github.com/Wuji-Technology-Co-Ltd/wujihandc
 
 ## 安装
 
-使用 pip 安装即可：
+已上传至 PyPI，使用 pip 安装即可：
 
 ```bash
 pip install wujihandpy
@@ -42,13 +42,7 @@ sudo udevadm trigger
 
 支持以下 Python 版本：
 
-- Python 3.8
-- Python 3.9
-- Python 3.10
-- Python 3.11
-- Python 3.12
-- Python 3.13
-- Python 3.14
+- Python 3.8-3.14
 
 ## 最低系统要求 (Windows)
 
