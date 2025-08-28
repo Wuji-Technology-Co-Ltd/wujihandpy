@@ -2,11 +2,11 @@
 
 这是一个使用 C++ **全新编写的** 舞肌灵巧手 SDK (Software Development Kit)。
 
-旨在提供更简洁、更高效、更易用的接口与灵巧手设备进行交互。
+提供更简洁、更高效、更易用的接口与灵巧手设备进行交互。
 
-警告：这不是一个 "stable" SDK，其接口和功能可能会在未来的版本中发生变化。
+Python 版本 [WujihandPy](https://github.com/Wuji-Technology-Co-Ltd/wujihandpy)（基于 pybind11 绑定），已发布至 PyPI，可通过 pip 安装。
 
-要访问旧版本 SDK（使用Python编写），请前往 [wujihand_sdk](https://github.com/Wuji-Technology-Co-Ltd/wujihand_sdk)。
+要使用旧版本 SDK（不建议），请前往 [wujihand_sdk](https://github.com/Wuji-Technology-Co-Ltd/wujihand_sdk)。
 
 ## 最低系统要求 (Linux)
 
