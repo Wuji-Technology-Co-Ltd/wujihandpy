@@ -175,7 +175,26 @@ def write_<dataname>_unchecked(self, np.<datatype>)
 def write_<dataname>_unchecked(self, np.array<datatype>)  # For bulk-write
 ```
 
-由于其立即返回特性，Unchecked 函数通常用于对实时性要求较高的场景。
+Unchecked 函数总是立即返回，不会阻塞，通常用于对实时性要求较高的场景。
+
+### Get
+
+如果希望获取以往读/写的结果，可以使用 `get` 系列函数：
+
+```python
+def get_<dataname>(self) -> np.<datatype>
+def get_<dataname>(self) -> np.array<datatype> # For bulk-read
+```
+
+`get` 系列函数同样不会阻塞，它总是立即返回最近一次读取到的数据，无论该数据来自 `read`、`async-read` 还是 `read-unchecked`。 
+
+如果尚未请求过该数据，或请求尚未成功，`get` 函数的返回值是未定义的（通常为0）。
+
+## 性能与优化
+
+WujihandPy 在充分保证易用性的同时，尽可能优化了性能与效率。
+
+我们强烈建议优先使用批量读/写以最大限度地发挥性能。
 
 ## 许可证
 
