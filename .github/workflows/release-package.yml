@@ -59,6 +59,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           path: dist/
+          pattern: dist-*
           merge-multiple: true
 
       - name: Publish distribution to PyPI
