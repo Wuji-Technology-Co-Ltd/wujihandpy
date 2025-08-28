@@ -18,15 +18,21 @@ RUN --mount=type=tmpfs,destination=/tmp \
     set -euo pipefail
     mkdir /output
     cp -r /source /tmp/source && cd /tmp/source
+
     for PYBIN in /opt/python/cp3*/bin; do
-        echo ">>> Building with $PYBIN"
-        $PYBIN/pip install -U pip build auditwheel scikit-build-core pybind11
-        rm -rf build dist *.egg-info
-        $PYBIN/python -m build --wheel
-        for whl in dist/*.whl; do
-            auditwheel repair $whl -w /output/
-        done
+        (
+            set -euo pipefail
+            echo ">>> Building with $PYBIN"
+            $PYBIN/pip install -U pip build auditwheel scikit-build-core pybind11
+            rm -rf build dist *.egg-info
+            $PYBIN/python -m build --wheel
+            for whl in dist/*.whl; do
+                auditwheel repair "$whl" -w /output/
+            done
+        ) &
     done
+
+    wait
 EOF
 
 FROM scratch
