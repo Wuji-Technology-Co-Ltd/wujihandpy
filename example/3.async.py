@@ -1,27 +1,27 @@
 import wujihandpy
 import numpy as np
-import time
 import math
+import asyncio
 
 
-def main():
+async def main():
     hand = wujihandpy.Hand()
     try:
-        run(hand)
+        await run(hand)
     finally:
         # Disable the entire hand
-        hand.write_joint_control_word(np.uint16(5))
+        await hand.write_joint_control_word_async(np.uint16(5))
 
 
-def run(hand: wujihandpy.Hand):
+async def run(hand: wujihandpy.Hand):
     # Set control mode
-    hand.write_joint_control_mode(np.uint16(2))
+    await hand.write_joint_control_mode_async(np.uint16(2))
 
     # Enable whole hand
-    hand.write_joint_control_word(np.uint16(1))
+    await hand.write_joint_control_word_async(np.uint16(1))
 
     # Return all joints to initial point
-    hand.write_joint_control_position(
+    await hand.write_joint_control_position_async(
         np.array(
             [
                 #   J1        J2        J3        J4
@@ -36,15 +36,15 @@ def run(hand: wujihandpy.Hand):
     )
 
     # Wait for joints to move into place
-    time.sleep(0.5)
+    await asyncio.sleep(0.5)
 
-    # Disable non-middle fingers & each J2
-    hand.write_joint_control_word(
+    # Disable unnecessary joints
+    await hand.write_joint_control_word_async(
         np.array(
             [
-                #J1 J2 J3 J4
+                # J1 J2 J3 J4
                 [5, 5, 5, 5],  # F1
-                [5, 5, 5, 5],  # F2
+                [1, 5, 1, 1],  # F2
                 [1, 5, 1, 1],  # F3
                 [5, 5, 5, 5],  # F4
                 [5, 5, 5, 5],  # F5
@@ -53,11 +53,14 @@ def run(hand: wujihandpy.Hand):
         )
     )
 
+    await asyncio.gather(shake(0.0, hand.finger(1)), shake(math.pi, hand.finger(2)))
+
+
+async def shake(x: float, finger: wujihandpy.Finger):
     # 2Hz SDO Control
     update_rate = 2.0
     update_period = 1.0 / update_rate
 
-    x = 0.0
     while True:
         x += math.pi / update_rate
         y = (math.cos(x) + 1.0) / 2.0
@@ -65,8 +68,8 @@ def run(hand: wujihandpy.Hand):
         pos_increase = np.int32(round(0xFFFFFF * y))
         pos_decrease = np.int32(0xFFFFFF - pos_increase)
 
-        # Control middle finger
-        hand.finger(2).write_joint_control_position(
+        # Control finger
+        finger.write_joint_control_position(
             np.array(
                 #     J1      J2       J3            J4
                 [pos_increase, 0, pos_decrease, pos_decrease],
@@ -74,8 +77,8 @@ def run(hand: wujihandpy.Hand):
             )
         )
 
-        time.sleep(update_period)
+        await asyncio.sleep(update_period)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
