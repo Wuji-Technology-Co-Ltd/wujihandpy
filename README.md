@@ -21,6 +21,20 @@ sudo udevadm control --reload-rules &&
 sudo udevadm trigger
 ```
 
+### 常见错误
+
+若遇到报错 `Could not find a version that satisfies the requirement`，请尝试升级 pip：
+
+```bash
+python3 -m pip install --upgrade pip
+```
+
+然后使用新的pip重新安装：
+
+```bash
+python3 -m pip install wujihandpy
+```
+
 ## 支持的 CPU 架构
 
 - x86_64
