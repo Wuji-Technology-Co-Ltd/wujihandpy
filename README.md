@@ -6,8 +6,6 @@
 
 Python 版本 [WujihandPy](https://github.com/Wuji-Technology-Co-Ltd/wujihandpy)（基于 pybind11 绑定），已发布至 PyPI，可通过 pip 安装。
 
-要使用旧版本 SDK（不建议），请前往 [wujihand_sdk](https://github.com/Wuji-Technology-Co-Ltd/wujihand_sdk)。
-
 ## 最低系统要求 (Linux)
 
 最低系统要求仅适用于在本地使用 SDK 发布包的情况。
