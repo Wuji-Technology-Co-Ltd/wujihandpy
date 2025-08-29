@@ -44,7 +44,6 @@ jobs:
 
   publish-to-pypi:
     name: Publish to PyPI
-    if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -55,18 +54,6 @@ jobs:
       contents: write
 
     steps:
-      - name: Download all dists
-        uses: actions/download-artifact@v5
-        with:
-          path: dist/
-          pattern: dist-*
-          merge-multiple: true
-
-      - name: Publish distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist
-
       - name: Checkout code
         uses: actions/checkout@v5
         with:
@@ -81,6 +68,19 @@ jobs:
           docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog $GIT_TAG > changelog.md
           cat changelog.md
 
+      - name: Download all dists
+        uses: actions/download-artifact@v5
+        with:
+          path: dist/
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Publish distribution to PyPI
+        if: github.ref_type == 'tag'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -89,7 +89,7 @@ jobs:
           name: ${{ env.GIT_TAG }}
           body_path: changelog.md
           draft: false
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ github.ref_type != 'tag' }}
+          make_latest: ${{ github.ref_type == 'tag' }}
           files: |
             dist/*.whl
