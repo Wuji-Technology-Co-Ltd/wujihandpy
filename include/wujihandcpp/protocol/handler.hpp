@@ -69,7 +69,7 @@ public:
 private:
     class Impl;
     static constexpr size_t impl_align = 8;
-    alignas(impl_align) uint8_t impl_[832];
+    alignas(impl_align) uint8_t impl_[720];
 };
 
 } // namespace protocol

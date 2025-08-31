@@ -1,7 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <thread>
 
 #include <libusb.h>
 
@@ -10,23 +9,16 @@
 #include "utility/logging.hpp"
 #include "utility/ring_buffer.hpp"
 
-#pragma once
-
 namespace wujihandcpp::driver {
 
 template <typename Device>
 template <is_legal_transfer_prefill TransferPrefill>
 class Driver<Device>::AsyncTransmitBuffer final {
 public:
-    explicit AsyncTransmitBuffer(
-        Driver& driver, size_t alloc_transfer_count,
-        std::chrono::steady_clock::duration transmitting_delay =
-            std::chrono::steady_clock::duration::min())
+    explicit AsyncTransmitBuffer(Driver& driver, size_t alloc_transfer_count)
         : driver_(driver)
-        , alloc_transfer_count_(alloc_transfer_count)
         , free_transfers_(alloc_transfer_count)
-        , transmitting_delay_(transmitting_delay)
-        , waiting_transfers_(alloc_transfer_count) {
+        , alloc_transfer_count_(alloc_transfer_count) {
 
         free_transfers_.push_back_multi(
             [this]() {
@@ -49,11 +41,6 @@ public:
                 return transfer;
             },
             alloc_transfer_count_);
-
-        if (transmitting_delay != std::chrono::steady_clock::duration::min()) {
-            transfer_waiting_thread_ =
-                std::jthread{&AsyncTransmitBuffer::transfer_waiting_thread_main, this};
-        }
     }
 
     ~AsyncTransmitBuffer() {
@@ -97,8 +84,6 @@ public:
             LOG_ERROR("Number of leaked transfers: %zu", unreleased_transfer_count);
             break;
         }
-
-        waiting_transfers_.emplace_back(nullptr, std::chrono::steady_clock::time_point::min());
     }
 
     std::byte* try_fetch_buffer(int size) {
@@ -149,23 +134,9 @@ public:
     }
 
 private:
-    void transfer_waiting_thread_main() {
-        bool running = true;
-        while (running) {
-            waiting_transfers_.wait_data();
-            waiting_transfers_.pop_front_multi([&](const WaitingTransfer& waiting) {
-                if (!waiting.transfer) {
-                    running = false;
-                    return;
-                }
-                std::this_thread::sleep_until(waiting.transmit_time);
-                trigger_transmission_nocheck(waiting.transfer);
-            });
-        }
-    }
-
     bool trigger_transmission_nocheck() {
         libusb_transfer* transfer = nullptr;
+
         if (!free_transfers_.pop_front([&transfer](libusb_transfer* t) { transfer = t; }))
             return false;
         // The transfer must be submitted to libusb only after the pop_front function returns.
@@ -173,15 +144,6 @@ private:
         // quickly, resulting in a false "ring queue full" condition when recycling transfer,
         // which could subsequently lead to transfer leaks.
 
-        if (transmitting_delay_ == std::chrono::steady_clock::duration::min())
-            trigger_transmission_nocheck(transfer);
-        else
-            waiting_transfers_.emplace_back(
-                transfer, std::chrono::steady_clock::now() + transmitting_delay_);
-        return true;
-    }
-
-    void trigger_transmission_nocheck(libusb_transfer* transfer) {
         static_cast<Device&>(driver_).before_submitting_transmit_transfer(transfer);
 
         int ret = libusb_submit_transfer(transfer);
@@ -193,6 +155,8 @@ private:
                 LOG_ERROR("Failed to submit transmit transfer: %d. Terminating...", ret);
             std::terminate();
         }
+
+        return true;
     }
 
     void usb_transmit_complete_callback(libusb_transfer* transfer) {
@@ -233,17 +197,8 @@ private:
 
     Driver& driver_;
 
-    size_t alloc_transfer_count_;
-
     utility::RingBuffer<libusb_transfer*> free_transfers_;
-
-    std::chrono::steady_clock::duration transmitting_delay_;
-    struct WaitingTransfer {
-        libusb_transfer* transfer;
-        std::chrono::steady_clock::time_point transmit_time;
-    };
-    utility::RingBuffer<WaitingTransfer> waiting_transfers_;
-    std::jthread transfer_waiting_thread_;
+    size_t alloc_transfer_count_;
 
     bool transfers_all_busy_ = false;
 };
