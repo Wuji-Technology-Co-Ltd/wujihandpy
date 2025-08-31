@@ -226,7 +226,9 @@ public:
     static void register_py_interface(py::class_<Wrapper>& py_class, const std::string& name) {
         if constexpr (Data::readable) {
             py_class.def(("read_" + name).c_str(), &Wrapper::read<Data>);
-            py_class.def(("read_" + name + "_async").c_str(), &Wrapper::read_async<Data>);
+            py_class.def(
+                ("read_" + name + "_async").c_str(), &Wrapper::read_async<Data>,
+                pybind11::keep_alive<0, 1>());
             py_class.def(
                 ("read_" + name + "_unchecked").c_str(), &Wrapper::read_async_unchecked<Data>);
             py_class.def(("get_" + name).c_str(), &Wrapper::get<Data>);
