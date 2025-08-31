@@ -19,7 +19,7 @@ class Finger : public DataOperator<Finger> {
 
 public:
     Joint joint(int index) {
-        if (index < 0 || index > 3)
+        if (index < 0 || index >= sub_count_)
             throw std::runtime_error("Index out of bounds! Possible values: 0, 1, 2, 3.");
         return sub(index);
     }

@@ -32,7 +32,6 @@ int main() {
     auto initial = static_cast<int32_t>(std::round(sum / 4));
 
     // Return all joints to initial point
-
     device::Latch latch;
     using ControlPosition = data::joint::ControlPosition;
     hand.finger(0).joint(0).write_async<ControlPosition>(latch, 0x200000);
@@ -48,7 +47,6 @@ int main() {
         hand.finger(i).joint(2).write_async<ControlPosition>(latch, 0xFFFFFF - initial);
         hand.finger(i).joint(3).write_async<ControlPosition>(latch, 0xFFFFFF - initial);
     }
-    hand.trigger_transmission();
     latch.wait();
 
     // Wait for joints to move into place

@@ -43,19 +43,20 @@ public:
 
     ~Handler();
 
-    void read_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id);
+    void init_storage_index(int storage_id, uint16_t index, uint8_t sub_index);
+
+    void read_async_unchecked(int storage_id);
 
     void read_async(
-        uint16_t index, uint8_t sub_index, int storage_id,
-        void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context);
+        int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context);
 
     template <size_t data_size>
-    void write_async_unchecked(Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id);
+    void write_async_unchecked(Buffer8 data, int storage_id);
 
     template <size_t data_size>
     void write_async(
-        Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id,
-        void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context);
+        Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
+        Buffer8 callback_context);
 
     void pdo_write_async_unchecked(const int32_t (&control_positions)[5][4], uint32_t timestamp);
 
@@ -68,7 +69,7 @@ public:
 private:
     class Impl;
     static constexpr size_t impl_align = 8;
-    alignas(impl_align) uint8_t impl_[808];
+    alignas(impl_align) uint8_t impl_[832];
 };
 
 } // namespace protocol

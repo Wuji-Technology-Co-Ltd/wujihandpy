@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <utility>
 
 namespace wujihandcpp {
 namespace device {
@@ -33,6 +34,20 @@ class DataTuple {
         return std::numeric_limits<int>::min();
     }
 
+    template <int index, typename F, typename T, typename Tnext, typename... Ts>
+    static void iterate_internal(F&& f) {
+        f.template operator()<index, T>();
+        iterate_internal<index + 1, F, Tnext, Ts...>(std::forward<F>(f));
+    }
+
+    template <int index, typename F, typename T>
+    static void iterate_internal(F&& f) {
+        f.template operator()<index, T>();
+    }
+
+    template <int, typename F>
+    static void iterate_internal(F&&) {}
+
 public:
     DataTuple() = delete;
 
@@ -45,6 +60,11 @@ public:
 
     static constexpr int match_index(const uint16_t index, const uint8_t sub_index) {
         return match_index_internal<0, Types...>(index, sub_index);
+    }
+
+    template <typename F>
+    static void iterate(F&& f) {
+        iterate_internal<0, F, Types...>(std::forward<F>(f));
     }
 };
 

@@ -47,28 +47,25 @@ int main() {
         hand.finger(i).joint(2).write_async<ControlPosition>(latch, 0x000000);
         hand.finger(i).joint(3).write_async<ControlPosition>(latch, 0x000000);
     }
-    hand.trigger_transmission();
     latch.wait();
 
     // Wait for joints to move into place
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    // Disable the thumb
-    hand.finger(0).write<data::joint::ControlWord>(5);
+    // Disable non-index fingers
+    for (int i = 0; i < 5; i++)
+        if (i != 1)
+            hand.finger(i).write<data::joint::ControlWord>(5);
 
-    // 1kHz SDO Control
-    constexpr double update_rate = 1000.0;
+    // 2Hz SDO Control
+    constexpr double update_rate = 2.0;
     constexpr auto update_period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
         std::chrono::duration<double>(1.0 / update_rate));
 
     auto next_iteration_time = std::chrono::steady_clock::now();
-    utility::FpsCounter fps_counter;
     double x = 0;
     while (running.load(std::memory_order_relaxed)) {
-        if (fps_counter.count())
-            std::cout << "SDO Control Actual Fps: " << fps_counter.fps() << '\n';
-
-        x += 0.005;
+        x += M_PI / update_rate;
         double y = (std::cos(x) + 1) / 2;
         auto position = static_cast<int32_t>(std::round(double(0xFFFFFF) * y));
         for (int i = 1; i < 5; i++) {
@@ -76,7 +73,6 @@ int main() {
             hand.finger(i).joint(2).write_async_unchecked<ControlPosition>(0xFFFFFF - position);
             hand.finger(i).joint(3).write_async_unchecked<ControlPosition>(0xFFFFFF - position);
         }
-        hand.trigger_transmission();
 
         next_iteration_time += update_period;
         std::this_thread::sleep_until(next_iteration_time);

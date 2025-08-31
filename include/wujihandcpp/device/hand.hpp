@@ -20,7 +20,9 @@ class Hand : public DataOperator<Hand> {
 
 public:
     Hand(uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count = 64)
-        : handler_(usb_vid, usb_pid, buffer_transfer_count, data_count(), index_to_storage_id) {};
+        : handler_(usb_vid, usb_pid, buffer_transfer_count, data_count(), index_to_storage_id) {
+        init_storage_indexes();
+    };
 
     Finger finger_thumb() { return finger(0); }
     Finger finger_index() { return finger(1); }
@@ -29,7 +31,7 @@ public:
     Finger finger_little() { return finger(4); }
 
     Finger finger(int index) {
-        if (index < 0 || index > 4)
+        if (index < 0 || index >= sub_count_)
             throw std::runtime_error("Index out of bounds! Possible values: 0, 1, 2, 3, 4.");
         return sub(index);
     }

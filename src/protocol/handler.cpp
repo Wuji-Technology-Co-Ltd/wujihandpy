@@ -28,71 +28,85 @@ public:
         int (*index_to_storage_id)(uint16_t, uint8_t))
         : Driver(usb_vid, usb_pid)
         , default_transmit_buffer_(*this, buffer_transfer_count)
-        , event_thread_transmit_buffer_(*this, buffer_transfer_count, std::chrono::milliseconds(1))
+        , tick_thread_transmit_buffer_(*this, buffer_transfer_count)
         , event_thread_([this]() { handle_events(); })
         , operation_thread_id_(std::this_thread::get_id())
+        , storage_unit_count_(storage_unit_count)
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
+        , tick_thread_([this](const std::stop_token& stop_token) { tick_thread_main(stop_token); })
         , index_to_storage_id_(index_to_storage_id) {}
 
     ~Impl() { stop_handling_events(); };
 
-    void read_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id) {
+    void init_storage_index(int storage_id, uint16_t index, uint8_t sub_index) {
+        // std::cout << std::format("[{}]: 0x{:02X}, {}\n", storage_id, (int)index, (int)sub_index);
+        storage_[storage_id].index = index;
+        storage_[storage_id].sub_index = sub_index;
+    }
+
+    void read_async_unchecked(int storage_id) {
         operation_thread_check();
 
-        if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
-            != OperatingState::NONE)
+        if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
+            != Operation::Mode::NONE)
             return;
 
-        read_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
+        storage_[storage_id].callback = nullptr;
+        storage_[storage_id].operation.store(
+            Operation{.mode = Operation::Mode::READ, .state = Operation::State::READING},
+            std::memory_order::release);
     }
 
     void read_async(
-        uint16_t index, uint8_t sub_index, int storage_id,
-        void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
+        int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
+        Buffer8 callback_context) {
         operation_thread_check();
 
-        if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
-            != OperatingState::NONE)
+        if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
+            != Operation::Mode::NONE) [[unlikely]]
             throw std::runtime_error("Illegal checked read: Data is being operated!");
 
-        storage_[storage_id].callback.store(callback, std::memory_order::relaxed);
-        storage_[storage_id].callback_context.store(callback_context, std::memory_order::relaxed);
-        storage_[storage_id].operating_state.store(
-            OperatingState::READING, std::memory_order::release);
-
-        read_async_unchecked_internal(default_transmit_buffer_, index, sub_index);
+        storage_[storage_id].callback = callback;
+        storage_[storage_id].callback_context = callback_context;
+        storage_[storage_id].operation.store(
+            Operation{.mode = Operation::Mode::READ, .state = Operation::State::READING},
+            std::memory_order::release);
     }
 
     template <size_t data_size>
-    void write_async_unchecked(Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id) {
+    void write_async_unchecked(Buffer8 data, int storage_id) {
         operation_thread_check();
 
-        if (storage_[storage_id].operating_state.load(std::memory_order::relaxed)
-            != OperatingState::NONE)
+        storage_[storage_id].value.store(data, std::memory_order::relaxed);
+
+        if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
+            != Operation::Mode::NONE)
             return;
 
-        using T = SizeToUIntType<data_size>;
-        write_async_unchecked_internal(default_transmit_buffer_, data.as<T>(), index, sub_index);
+        storage_[storage_id].callback = nullptr;
+        storage_[storage_id].operation.store(
+            Operation{
+                .mode = Operation::WriteMode<data_size>(), .state = Operation::State::WRITING},
+            std::memory_order::release);
     }
 
     template <size_t data_size>
     void write_async(
-        Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id,
-        void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
+        Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
+        Buffer8 callback_context) {
         operation_thread_check();
 
-        if (storage_[storage_id].operating_state.load(std::memory_order::acquire)
-            != OperatingState::NONE)
+        if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
+            != Operation::Mode::NONE) [[unlikely]]
             throw std::runtime_error("Illegal checked write: Data is being operated!");
 
         storage_[storage_id].value.store(data, std::memory_order::relaxed);
-        storage_[storage_id].callback.store(callback, std::memory_order::relaxed);
-        storage_[storage_id].callback_context.store(callback_context, std::memory_order::relaxed);
-        storage_[storage_id].operating_state.store(
-            OperatingState::WRITING, std::memory_order::release);
-
-        using T = SizeToUIntType<data_size>;
-        write_async_unchecked_internal(default_transmit_buffer_, data.as<T>(), index, sub_index);
+        storage_[storage_id].callback = callback;
+        storage_[storage_id].callback_context = callback_context;
+        storage_[storage_id].operation.store(
+            Operation{
+                .mode = Operation::WriteMode<data_size>(), .state = Operation::State::WRITING},
+            std::memory_order::release);
     }
 
     void pdo_write_async_unchecked(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
@@ -121,21 +135,54 @@ public:
     void disable_thread_safe_check() { operation_thread_id_ = std::thread::id{}; }
 
 private:
-    enum class OperatingState : uint32_t {
-        NONE = 0,
+    struct Operation {
+        enum class Mode : uint8_t {
+            NONE = 0,
 
-        READING = 2,
+            READ,
 
-        WRITING = 4,
-        WRITING_CONFIRMING = 5,
+            WRITE8,
+            WRITE16,
+            WRITE32,
+            WRITE64,
+        } mode : 4;
+        enum class State : uint8_t {
+            SUCCESS = 0,
+
+            READING,
+
+            WRITING,
+            WRITING_CONFIRMING,
+        } state : 4;
+
+        template <size_t data_size>
+        static constexpr Mode WriteMode() {
+            if constexpr (data_size == 1)
+                return Mode::WRITE8;
+            else if constexpr (data_size == 2)
+                return Mode::WRITE16;
+            else if constexpr (data_size == 4)
+                return Mode::WRITE32;
+            else if constexpr (data_size == 8)
+                return Mode::WRITE64;
+        }
     };
     struct StorageUnit {
-        std::atomic<Buffer8> value;
+        std::atomic<Operation> operation =
+            Operation{.mode = Operation::Mode::NONE, .state = Operation::State::SUCCESS};
+        uint8_t sub_index;
+        uint16_t index;
+
         std::atomic<uint32_t> version = 0;
-        std::atomic<OperatingState> operating_state;
-        std::atomic<void (*)(Buffer8 context, Buffer8 value)> callback;
-        std::atomic<Buffer8> callback_context;
+        std::atomic<Buffer8> value;
+
+        void (*callback)(Buffer8 context, Buffer8 value);
+        Buffer8 callback_context;
     };
+    static_assert(sizeof(StorageUnit) == 32);
+    static_assert(decltype(StorageUnit::operation)::is_always_lock_free);
+    static_assert(decltype(StorageUnit::version)::is_always_lock_free);
+    static_assert(decltype(StorageUnit::value)::is_always_lock_free);
 
     void operation_thread_check() const {
         if (operation_thread_id_ == std::thread::id{})
@@ -216,6 +263,7 @@ private:
         // for (int i = 0; i < transfer->actual_length; i++)
         //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
         // std::cout << '\n';
+
         auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
         header.type = 0;
     }
@@ -237,8 +285,6 @@ private:
 
         if (header.type == 0x21)
             read_sdo_frame(pointer, sentinel);
-
-        event_thread_transmit_buffer_.trigger_transmission();
     }
 
     void read_sdo_frame(std::byte*& pointer, const std::byte* sentinel) {
@@ -273,30 +319,26 @@ private:
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
         auto& storage = storage_[storage_id];
 
-        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
+        auto operation = storage.operation.load(std::memory_order::acquire);
+        if (operation.mode == Operation::Mode::NONE) [[unlikely]]
+            return;
 
-        if (operating_state != OperatingState::WRITING_CONFIRMING) {
+        if (operation.state == Operation::State::READING) {
             storage.value.store(Buffer8{data.value}, std::memory_order::relaxed);
             auto new_version = storage.version.load(std::memory_order::relaxed) + 1;
             if (new_version == 0)
                 new_version = 1;
             storage.version.store(new_version, std::memory_order::release);
-        }
 
-        if (operating_state != OperatingState::NONE) {
-            if (operating_state == OperatingState::READING) {
-                complete_operation(storage, Buffer8{data.value});
-            } else if (operating_state == OperatingState::WRITING_CONFIRMING) {
-                if (data.value == storage.value.load(std::memory_order::relaxed).as<T>())
-                    complete_operation(storage);
-                else {
-                    storage.operating_state.store(
-                        OperatingState::WRITING, std::memory_order::relaxed);
-                    write_async_unchecked_internal(
-                        event_thread_transmit_buffer_,
-                        storage.value.load(std::memory_order::relaxed).as<T>(), data.header.index,
-                        data.header.sub_index);
-                }
+            operation.state = Operation::State::SUCCESS;
+            storage.operation.store(operation, std::memory_order::release);
+        } else if (operation.state == Operation::State::WRITING_CONFIRMING) {
+            if (data.value == storage.value.load(std::memory_order::relaxed).as<T>()) {
+                operation.state = Operation::State::SUCCESS;
+                storage.operation.store(operation, std::memory_order::relaxed);
+            } else {
+                operation.state = Operation::State::WRITING;
+                storage.operation.store(operation, std::memory_order::relaxed);
             }
         }
     }
@@ -308,15 +350,6 @@ private:
         int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
         if (storage_id < 0)
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
-        auto& storage = storage_[storage_id];
-
-        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
-        if (operating_state != OperatingState::NONE) {
-            if (operating_state == OperatingState::READING
-                || operating_state == OperatingState::WRITING_CONFIRMING)
-                read_async_unchecked_internal(
-                    event_thread_transmit_buffer_, data.header.index, data.header.sub_index);
-        }
     }
 
     void read_sdo_operation_write_success(std::byte*& pointer) {
@@ -328,10 +361,13 @@ private:
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
         auto& storage = storage_[storage_id];
 
-        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
-        if (operating_state != OperatingState::NONE) {
-            if (operating_state == OperatingState::WRITING)
-                complete_operation(storage);
+        auto operation = storage.operation.load(std::memory_order::acquire);
+        if (operation.mode == Operation::Mode::NONE) [[unlikely]]
+            return;
+
+        if (operation.state == Operation::State::WRITING) {
+            operation.state = Operation::State::SUCCESS;
+            storage.operation.store(operation, std::memory_order::relaxed);
         }
     }
 
@@ -344,14 +380,69 @@ private:
             throw std::runtime_error{"Unexpected sdo index & sub-index!"};
         auto& storage = storage_[storage_id];
 
-        auto operating_state = storage.operating_state.load(std::memory_order::acquire);
-        if (operating_state != OperatingState::NONE) {
-            if (operating_state == OperatingState::WRITING) {
-                storage.operating_state.store(
-                    OperatingState::WRITING_CONFIRMING, std::memory_order::relaxed);
-                read_async_unchecked_internal(
-                    event_thread_transmit_buffer_, data.header.index, data.header.sub_index);
+        auto operation = storage.operation.load(std::memory_order::acquire);
+        if (operation.mode == Operation::Mode::NONE) [[unlikely]]
+            return;
+
+        if (operation.state == Operation::State::WRITING) {
+            operation.state = Operation::State::WRITING_CONFIRMING;
+            storage.operation.store(operation, std::memory_order::relaxed);
+        }
+    }
+
+    void tick_thread_main(const std::stop_token& token) {
+        constexpr double update_rate = 199.0;
+        constexpr auto update_period =
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(1.0 / update_rate));
+
+        while (!token.stop_requested()) {
+            for (size_t i = 0; i < storage_unit_count_; i++) {
+                auto& storage = storage_[i];
+
+                auto operation = storage.operation.load(std::memory_order::acquire);
+                if (operation.mode == Operation::Mode::NONE)
+                    continue;
+
+                if (operation.state == Operation::State::SUCCESS) {
+                    operation.mode = Operation::Mode::NONE;
+                    storage.operation.store(operation, std::memory_order::relaxed);
+
+                    if (storage.callback)
+                        storage.callback(
+                            storage.callback_context,
+                            storage.value.load(std::memory_order::relaxed));
+                } else if (
+                    operation.state == Operation::State::READING
+                    || operation.state == Operation::State::WRITING_CONFIRMING) {
+                    read_async_unchecked_internal(
+                        tick_thread_transmit_buffer_, storage.index, storage.sub_index);
+                } else if (operation.state == Operation::State::WRITING) {
+                    if (operation.mode == Operation::Mode::WRITE8)
+                        write_async_unchecked_internal(
+                            tick_thread_transmit_buffer_,
+                            storage.value.load(std::memory_order::relaxed).as<uint8_t>(),
+                            storage.index, storage.sub_index);
+                    else if (operation.mode == Operation::Mode::WRITE16)
+                        write_async_unchecked_internal(
+                            tick_thread_transmit_buffer_,
+                            storage.value.load(std::memory_order::relaxed).as<uint16_t>(),
+                            storage.index, storage.sub_index);
+                    else if (operation.mode == Operation::Mode::WRITE32)
+                        write_async_unchecked_internal(
+                            tick_thread_transmit_buffer_,
+                            storage.value.load(std::memory_order::relaxed).as<uint32_t>(),
+                            storage.index, storage.sub_index);
+                    else if (operation.mode == Operation::Mode::WRITE64)
+                        write_async_unchecked_internal(
+                            tick_thread_transmit_buffer_,
+                            storage.value.load(std::memory_order::relaxed).as<uint64_t>(),
+                            storage.index, storage.sub_index);
+                }
             }
+            tick_thread_transmit_buffer_.trigger_transmission();
+
+            std::this_thread::sleep_for(update_period);
         }
     }
 
@@ -377,12 +468,6 @@ private:
         };
     }
 
-    static void complete_operation(StorageUnit& storage, Buffer8 value = {}) {
-        storage.operating_state.store(OperatingState::NONE, std::memory_order::release);
-        if (auto callback = storage.callback.load(std::memory_order::relaxed))
-            callback(storage.callback_context.load(std::memory_order::relaxed), value);
-    }
-
     template <size_t size>
     using SizeToUIntType = std::conditional_t<
         size == 1, uint8_t,
@@ -392,12 +477,15 @@ private:
                 size == 4, uint32_t, std::conditional_t<size == 8, uint64_t, void>>>>;
 
     AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;
-    AsyncTransmitBuffer<protocol::Header> event_thread_transmit_buffer_;
+    AsyncTransmitBuffer<protocol::Header> tick_thread_transmit_buffer_;
     std::jthread event_thread_;
 
     std::thread::id operation_thread_id_;
 
+    size_t storage_unit_count_;
     std::unique_ptr<StorageUnit[]> storage_;
+    std::jthread tick_thread_;
+
     int (*index_to_storage_id_)(uint16_t, uint8_t);
 };
 
@@ -412,45 +500,41 @@ API Handler::Handler(
 
 API Handler::~Handler() { std::destroy_at(reinterpret_cast<Impl*>(impl_)); }
 
-API void Handler::read_async_unchecked(uint16_t index, uint8_t sub_index, int storage_id) {
-    reinterpret_cast<Impl*>(impl_)->read_async_unchecked(index, sub_index, storage_id);
+API void Handler::init_storage_index(int storage_id, uint16_t index, uint8_t sub_index) {
+    reinterpret_cast<Impl*>(impl_)->init_storage_index(storage_id, index, sub_index);
+}
+
+API void Handler::read_async_unchecked(int storage_id) {
+    reinterpret_cast<Impl*>(impl_)->read_async_unchecked(storage_id);
 }
 
 API void Handler::read_async(
-    uint16_t index, uint8_t sub_index, int storage_id,
-    void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
-    reinterpret_cast<Impl*>(impl_)->read_async(
-        index, sub_index, storage_id, callback, callback_context);
+    int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
+    reinterpret_cast<Impl*>(impl_)->read_async(storage_id, callback, callback_context);
 }
 
 template <size_t data_size>
-void Handler::write_async_unchecked(
-    Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id) {
-    reinterpret_cast<Impl*>(impl_)->template write_async_unchecked<data_size>(
-        data, index, sub_index, storage_id);
+void Handler::write_async_unchecked(Buffer8 data, int storage_id) {
+    reinterpret_cast<Impl*>(impl_)->template write_async_unchecked<data_size>(data, storage_id);
 }
 
-template API void Handler::write_async_unchecked<1>(Buffer8, uint16_t, uint8_t, int);
-template API void Handler::write_async_unchecked<2>(Buffer8, uint16_t, uint8_t, int);
-template API void Handler::write_async_unchecked<4>(Buffer8, uint16_t, uint8_t, int);
-template API void Handler::write_async_unchecked<8>(Buffer8, uint16_t, uint8_t, int);
+template API void Handler::write_async_unchecked<1>(Buffer8, int);
+template API void Handler::write_async_unchecked<2>(Buffer8, int);
+template API void Handler::write_async_unchecked<4>(Buffer8, int);
+template API void Handler::write_async_unchecked<8>(Buffer8, int);
 
 template <size_t data_size>
 void Handler::write_async(
-    Buffer8 data, uint16_t index, uint8_t sub_index, int storage_id,
-    void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
+    Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
+    Buffer8 callback_context) {
     reinterpret_cast<Impl*>(impl_)->template write_async<data_size>(
-        data, index, sub_index, storage_id, callback, callback_context);
+        data, storage_id, callback, callback_context);
 }
 
-template API void
-    Handler::write_async<1>(Buffer8, uint16_t, uint8_t, int, void (*)(Buffer8, Buffer8), Buffer8);
-template API void
-    Handler::write_async<2>(Buffer8, uint16_t, uint8_t, int, void (*)(Buffer8, Buffer8), Buffer8);
-template API void
-    Handler::write_async<4>(Buffer8, uint16_t, uint8_t, int, void (*)(Buffer8, Buffer8), Buffer8);
-template API void
-    Handler::write_async<8>(Buffer8, uint16_t, uint8_t, int, void (*)(Buffer8, Buffer8), Buffer8);
+template API void Handler::write_async<1>(Buffer8, int, void (*)(Buffer8, Buffer8), Buffer8);
+template API void Handler::write_async<2>(Buffer8, int, void (*)(Buffer8, Buffer8), Buffer8);
+template API void Handler::write_async<4>(Buffer8, int, void (*)(Buffer8, Buffer8), Buffer8);
+template API void Handler::write_async<8>(Buffer8, int, void (*)(Buffer8, Buffer8), Buffer8);
 
 API void Handler::pdo_write_async_unchecked(
     const int32_t (&control_positions)[5][4], uint32_t timestamp) {

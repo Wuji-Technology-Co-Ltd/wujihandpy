@@ -27,8 +27,7 @@ class DataOperator {
     template <typename Data, typename F>
     typename std::enable_if<std::is_same<typename Data::Base, T>::value>::type iterate(F&& f) {
         T& self = *static_cast<T*>(this);
-        f(self.index_offset_ + Data::index, Data::sub_index,
-          self.storage_offset_ + T::Datas::template index<Data>());
+        f(self.storage_offset_ + T::Datas::template index<Data>());
     }
 
     template <typename Data, typename F>
@@ -47,7 +46,6 @@ public:
 
         Latch latch;
         read_async<Data>(latch);
-        trigger_transmission();
         latch.wait();
         return get<Data>();
     }
@@ -60,7 +58,6 @@ public:
 
         Latch latch;
         read_async<Data>(latch);
-        trigger_transmission();
         latch.wait();
     }
 
@@ -70,13 +67,12 @@ public:
         static_assert(Data::readable, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
+        iterate<Data>([&](int storage_id) {
             latch.count_up();
 
             Buffer8 callback_context{&latch};
             handler.read_async(
-                index, sub_index, storage_id,
-                [](Buffer8 context, Buffer8) { (context.as<Latch*>())->count_down(); },
+                storage_id, [](Buffer8 context, Buffer8) { (context.as<Latch*>())->count_down(); },
                 callback_context);
         });
     }
@@ -95,10 +91,10 @@ public:
         static_assert(std::is_trivially_destructible<F>::value, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
+        iterate<Data>([&](int storage_id) {
             Buffer8 callback_context{f};
             handler.read_async(
-                index, sub_index, storage_id,
+                storage_id,
                 [](Buffer8 context, Buffer8 value) {
                     context.as<F>()(value.as<typename Data::ValueType>());
                 },
@@ -116,9 +112,7 @@ public:
         static_assert(Data::readable, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&handler](uint16_t index, uint8_t sub_index, int storage_id) {
-            handler.read_async_unchecked(index, sub_index, storage_id);
-        });
+        iterate<Data>([&handler](int storage_id) { handler.read_async_unchecked(storage_id); });
     }
 
     template <typename Data>
@@ -129,7 +123,7 @@ public:
 
         Handler& handler = static_cast<T*>(this)->handler_;
         typename Data::ValueType value;
-        iterate<Data>([&](uint16_t, uint8_t, int storage_id) {
+        iterate<Data>([&](int storage_id) {
             value = handler.get(storage_id).as<typename Data::ValueType>();
         });
         return value;
@@ -142,7 +136,6 @@ public:
 
         Latch latch;
         write_async<Data>(latch, value);
-        trigger_transmission();
         latch.wait();
     }
 
@@ -152,12 +145,12 @@ public:
         static_assert(Data::writable, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
+        iterate<Data>([&](int storage_id) {
             latch.count_up();
 
             Buffer8 callback_context{&latch};
             handler.write_async<sizeof(value)>(
-                Buffer8{value}, index, sub_index, storage_id,
+                Buffer8{value}, storage_id,
                 [](Buffer8 context, Buffer8) { (context.as<Latch*>())->count_down(); },
                 callback_context);
         });
@@ -176,11 +169,11 @@ public:
         static_assert(std::is_trivially_destructible<F>::value, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
+        iterate<Data>([&](int storage_id) {
             Buffer8 callback_context{f};
             handler.write_async<sizeof(value)>(
-                Buffer8{value}, index, sub_index, storage_id,
-                [](Buffer8 context, Buffer8) { context.as<F>()(); }, callback_context);
+                Buffer8{value}, storage_id, [](Buffer8 context, Buffer8) { context.as<F>()(); },
+                callback_context);
         });
     }
 
@@ -190,15 +183,9 @@ public:
         static_assert(Data::writable, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&](uint16_t index, uint8_t sub_index, int storage_id) {
-            handler.write_async_unchecked<sizeof(value)>(
-                Buffer8{value}, index, sub_index, storage_id);
+        iterate<Data>([&](int storage_id) {
+            handler.write_async_unchecked<sizeof(value)>(Buffer8{value}, storage_id);
         });
-    }
-
-    void trigger_transmission() {
-        Handler& handler = static_cast<T*>(this)->handler_;
-        handler.trigger_transmission();
     }
 
 private:
@@ -212,8 +199,42 @@ private:
         return T::Datas::count;
     }
 
+    class StorageInitializer {
+    public:
+        explicit StorageInitializer(T& self)
+            : self_(self) {}
+
+        template <int index, typename U>
+        void operator()() const {
+            Handler& handler = self_.handler_;
+            handler.init_storage_index(
+                self_.storage_offset_ + index, self_.index_offset_ + U::index, U::sub_index);
+        }
+
+    private:
+        T& self_;
+    };
+
+    template <typename U>
+    static decltype(std::declval<typename U::Sub>(), void())
+        init_storage_indexes_internal(U& self) {
+        for (int i = 0; i < U::sub_count_; i++)
+            self.sub(i).init_storage_indexes();
+    }
+
+    template <typename U>
+    static void init_storage_indexes_internal(...) {}
+
 protected:
     static constexpr int data_count() { return data_count_internal<T>(0); }
+
+    void init_storage_indexes() {
+        T& self = *static_cast<T*>(this);
+        auto initializer = StorageInitializer(self);
+        T::Datas::iterate(initializer);
+
+        init_storage_indexes_internal<T>(self);
+    }
 };
 
 } // namespace device
