@@ -17,7 +17,7 @@ int main() {
     static std::atomic<bool> running{true};
     std::signal(SIGINT, [](int) { running.store(false, std::memory_order_relaxed); });
 
-    device::Hand hand{0x0483, 0x5740};
+    device::Hand hand{0x0483, 0x7530};
 
     // Set control mode
     hand.write<data::joint::ControlMode>(2);
@@ -25,37 +25,16 @@ int main() {
     // Enable whole hand
     hand.write<data::joint::ControlWord>(1);
 
-    // Some older firmware require this for enabling.
-    if (false) {
-        hand.write<data::joint::SinLevel>(5);
-        hand.write<data::joint::SinLevel>(0);
-    }
-
     // Return all joints to initial point
-    device::Latch latch;
     using ControlPosition = data::joint::ControlPosition;
-    hand.finger(0).joint(0).write_async<ControlPosition>(latch, 0x200000);
-    hand.finger(0).joint(1).write_async<ControlPosition>(latch, 0x200000);
-    hand.finger(0).joint(2).write_async<ControlPosition>(latch, 0x200000);
-    hand.finger(0).joint(3).write_async<ControlPosition>(latch, 0x200000);
-    hand.finger(1).joint(1).write_async<ControlPosition>(latch, 0xBFFFFF);
-    hand.finger(2).joint(1).write_async<ControlPosition>(latch, 0x900000);
-    hand.finger(3).joint(1).write_async<ControlPosition>(latch, 0x600000);
-    hand.finger(4).joint(1).write_async<ControlPosition>(latch, 0x400000);
-    for (int i = 1; i < 5; i++) {
-        hand.finger(i).joint(0).write_async<ControlPosition>(latch, 0xFFFFFF);
-        hand.finger(i).joint(2).write_async<ControlPosition>(latch, 0x000000);
-        hand.finger(i).joint(3).write_async<ControlPosition>(latch, 0x000000);
-    }
-    latch.wait();
-
-    // Wait for joints to move into place
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    hand.write<ControlPosition>(0.0);
 
     // Disable non-index fingers
+    device::Latch latch;
     for (int i = 0; i < 5; i++)
         if (i != 1)
-            hand.finger(i).write<data::joint::ControlWord>(5);
+            hand.finger(i).write_async<data::joint::ControlWord>(latch, 5);
+    latch.wait();
 
     // 2Hz SDO Control
     constexpr double update_rate = 2.0;
@@ -65,15 +44,13 @@ int main() {
     auto next_iteration_time = std::chrono::steady_clock::now();
     double x = 0;
     while (running.load(std::memory_order_relaxed)) {
-        x += M_PI / update_rate;
-        double y = (std::cos(x) + 1) / 2;
-        auto position = static_cast<int32_t>(std::round(double(0xFFFFFF) * y));
-        for (int i = 1; i < 5; i++) {
-            hand.finger(i).joint(0).write_async_unchecked<ControlPosition>(position);
-            hand.finger(i).joint(2).write_async_unchecked<ControlPosition>(0xFFFFFF - position);
-            hand.finger(i).joint(3).write_async_unchecked<ControlPosition>(0xFFFFFF - position);
-        }
+        double y = (1 - std::cos(x)) * 0.8;
 
+        hand.finger(1).joint(0).write_async_unchecked<ControlPosition>(y);
+        hand.finger(1).joint(2).write_async_unchecked<ControlPosition>(y);
+        hand.finger(1).joint(3).write_async_unchecked<ControlPosition>(y);
+
+        x += M_PI / update_rate;
         next_iteration_time += update_period;
         std::this_thread::sleep_until(next_iteration_time);
     }

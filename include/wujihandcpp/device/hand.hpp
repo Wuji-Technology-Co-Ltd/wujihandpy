@@ -21,7 +21,7 @@ class Hand : public DataOperator<Hand> {
 public:
     Hand(uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count = 64)
         : handler_(usb_vid, usb_pid, buffer_transfer_count, data_count(), index_to_storage_id) {
-        init_storage_indexes();
+        init_storage_info();
     };
 
     Finger finger_thumb() { return finger(0); }
@@ -36,7 +36,7 @@ public:
         return sub(index);
     }
 
-    void pdo_write_async_unchecked(const int32_t (&control_positions)[5][4], uint32_t timestamp) {
+    void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp) {
         handler_.pdo_write_async_unchecked(control_positions, timestamp);
     }
 

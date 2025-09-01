@@ -19,7 +19,10 @@ struct ReadOnlyData {
     static constexpr uint8_t sub_index = sub_index_;
 
     using ValueType = ValueType_;
-};
+    static constexpr size_t value_size = sizeof(ValueType);
+
+    static constexpr uint32_t policy(uint64_t) { return 0; }
+}; // namespace data
 
 template <typename Base_, uint16_t index_, uint8_t sub_index_, typename ValueType_>
 struct WriteOnlyData {
@@ -34,6 +37,9 @@ struct WriteOnlyData {
     static constexpr uint8_t sub_index = sub_index_;
 
     using ValueType = ValueType_;
+    static constexpr size_t value_size = sizeof(ValueType);
+
+    static constexpr uint32_t policy(uint64_t) { return 0; }
 };
 
 } // namespace data

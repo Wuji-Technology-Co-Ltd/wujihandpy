@@ -20,6 +20,7 @@ template <typename T>
 class DataOperator {
     using Handler = protocol::Handler;
     using Buffer8 = protocol::Handler::Buffer8;
+    using StorageInfo = protocol::Handler::StorageInfo;
 
     template <typename U>
     friend class DataOperator;
@@ -149,7 +150,7 @@ public:
             latch.count_up();
 
             Buffer8 callback_context{&latch};
-            handler.write_async<sizeof(value)>(
+            handler.write_async(
                 Buffer8{value}, storage_id,
                 [](Buffer8 context, Buffer8) { (context.as<Latch*>())->count_down(); },
                 callback_context);
@@ -171,7 +172,7 @@ public:
         Handler& handler = static_cast<T*>(this)->handler_;
         iterate<Data>([&](int storage_id) {
             Buffer8 callback_context{f};
-            handler.write_async<sizeof(value)>(
+            handler.write_async(
                 Buffer8{value}, storage_id, [](Buffer8 context, Buffer8) { context.as<F>()(); },
                 callback_context);
         });
@@ -183,9 +184,8 @@ public:
         static_assert(Data::writable, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
-        iterate<Data>([&](int storage_id) {
-            handler.write_async_unchecked<sizeof(value)>(Buffer8{value}, storage_id);
-        });
+        iterate<Data>(
+            [&](int storage_id) { handler.write_async_unchecked(Buffer8{value}, storage_id); });
     }
 
 private:
@@ -201,39 +201,44 @@ private:
 
     class StorageInitializer {
     public:
-        explicit StorageInitializer(T& self)
-            : self_(self) {}
+        explicit StorageInitializer(T& self, uint64_t i)
+            : self_(self)
+            , i_(i) {}
 
         template <int index, typename U>
         void operator()() const {
             Handler& handler = self_.handler_;
-            handler.init_storage_index(
-                self_.storage_offset_ + index, self_.index_offset_ + U::index, U::sub_index);
+            handler.init_storage_info(
+                self_.storage_offset_ + index,
+                StorageInfo{
+                    U::value_size, self_.index_offset_ + U::index, U::sub_index, U::policy(i_)});
         }
 
     private:
         T& self_;
+        uint64_t i_;
     };
 
     template <typename U>
     static decltype(std::declval<typename U::Sub>(), void())
-        init_storage_indexes_internal(U& self) {
-        for (int i = 0; i < U::sub_count_; i++)
-            self.sub(i).init_storage_indexes();
+        init_storage_info_internal(U& self, uint64_t i) {
+        i <<= 8;
+        for (int j = 0; j < U::sub_count_; i++, j++)
+            self.sub(j).init_storage_info(i);
     }
 
     template <typename U>
-    static void init_storage_indexes_internal(...) {}
+    static void init_storage_info_internal(...) {}
 
 protected:
     static constexpr int data_count() { return data_count_internal<T>(0); }
 
-    void init_storage_indexes() {
+    void init_storage_info(uint64_t i = 0) {
         T& self = *static_cast<T*>(this);
-        auto initializer = StorageInitializer(self);
+        auto initializer = StorageInitializer(self, i);
         T::Datas::iterate(initializer);
 
-        init_storage_indexes_internal<T>(self);
+        init_storage_info_internal<T>(self, i);
     }
 };
 
