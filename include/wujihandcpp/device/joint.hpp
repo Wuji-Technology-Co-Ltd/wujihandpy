@@ -22,15 +22,12 @@ private:
 
     using Datas = DataTuple<
         data::joint::ControlMode, data::joint::SinLevel, data::joint::ControlWord,
-        data::joint::Position, data::joint::ControlPosition>;
+        data::joint::Position, data::joint::ControlPosition, data::joint::UpperLimit,
+        data::joint::LowerLimit>;
 
     protocol::Handler& handler_;
     uint16_t index_offset_;
     int storage_offset_;
-
-    constexpr static int index_to_storage_id(uint16_t index, uint8_t sub_index) {
-        return Datas::match_index(index, sub_index);
-    }
 };
 
 } // namespace device

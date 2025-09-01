@@ -67,8 +67,7 @@ public:
     };
 
     explicit Handler(
-        uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count,
-        int (*index_to_storage_id)(uint16_t, uint8_t));
+        uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count);
 
     ~Handler();
 
@@ -96,7 +95,7 @@ public:
 private:
     class Impl;
     static constexpr size_t impl_align = 8;
-    alignas(impl_align) uint8_t impl_[720];
+    alignas(impl_align) uint8_t impl_[760];
 };
 
 } // namespace protocol

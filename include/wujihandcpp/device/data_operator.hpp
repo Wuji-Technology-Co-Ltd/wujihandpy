@@ -208,10 +208,9 @@ private:
         template <int index, typename U>
         void operator()() const {
             Handler& handler = self_.handler_;
-            handler.init_storage_info(
-                self_.storage_offset_ + index,
-                StorageInfo{
-                    U::value_size, self_.index_offset_ + U::index, U::sub_index, U::policy(i_)});
+            StorageInfo info = U::info(i_);
+            info.index += self_.index_offset_;
+            handler.init_storage_info(self_.storage_offset_ + index, info);
         }
 
     private:

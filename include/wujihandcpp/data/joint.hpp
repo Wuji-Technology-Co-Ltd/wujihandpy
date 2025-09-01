@@ -22,21 +22,44 @@ struct SinLevel : WriteOnlyData<device::Joint, 0x05, 8, uint16_t> {};
 
 struct ControlWord : WriteOnlyData<device::Joint, 0x40, 0, uint16_t> {};
 
-struct Position : ReadOnlyData<device::Joint, 0x64, 0, double> {
-    static constexpr size_t value_size = sizeof(uint32_t);
+namespace internal {
 
-    static constexpr uint32_t policy(uint64_t i) {
-        using StorageInfo = protocol::Handler::StorageInfo;
-        // Reverse each J1 except thumb
-        return ((i & 0xFF) == 0 && i != 0x0000)
-                 ? (StorageInfo::POSITION_FLOATING | StorageInfo::POSITION_REVERSED)
-                 : (StorageInfo::POSITION_FLOATING);
+static constexpr bool is_reversed_joint(uint64_t i) {
+    // Reverse each J1 except thumb
+    return (i & 0xFF) == 0 && i != 0x0000;
+}
+
+static constexpr uint32_t position_policy(uint64_t i) {
+    return is_reversed_joint(i) ? (StorageInfo::POSITION_FLOATING | StorageInfo::POSITION_REVERSED)
+                                : (StorageInfo::POSITION_FLOATING);
+}
+
+} // namespace internal
+
+struct Position : ReadOnlyData<device::Joint, 0x64, 0, double> {
+    static constexpr StorageInfo info(uint64_t i) {
+        return StorageInfo{sizeof(uint32_t), index, sub_index, internal::position_policy(i)};
     }
 };
 struct ControlPosition : WriteOnlyData<device::Joint, 0x7A, 0, double> {
-    static constexpr size_t value_size = sizeof(uint32_t);
+    static constexpr StorageInfo info(uint64_t i) {
+        return StorageInfo{sizeof(uint32_t), index, sub_index, internal::position_policy(i)};
+    }
+};
 
-    static constexpr uint32_t policy(uint64_t i) { return Position::policy(i); }
+struct UpperLimit : ReadOnlyData<device::Joint, 0x0E, 27, double> {
+    static constexpr StorageInfo info(uint64_t i) {
+        return StorageInfo{
+            sizeof(uint32_t), index, internal::is_reversed_joint(i) ? sub_index : uint8_t(28),
+            internal::position_policy(i)};
+    }
+};
+struct LowerLimit : ReadOnlyData<device::Joint, 0x0E, 28, double> {
+    static constexpr StorageInfo info(uint64_t i) {
+        return StorageInfo{
+            sizeof(uint32_t), index, internal::is_reversed_joint(i) ? sub_index : uint8_t(27),
+            internal::position_policy(i)};
+    }
 };
 
 } // namespace joint

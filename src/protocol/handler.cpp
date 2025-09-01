@@ -7,6 +7,7 @@
 #include <atomic>
 #include <bit>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -26,8 +27,7 @@ class Handler::Impl : driver::Driver<Impl> {
 
 public:
     explicit Impl(
-        uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count,
-        int (*index_to_storage_id)(uint16_t, uint8_t))
+        uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count)
         : Driver(usb_vid, usb_pid)
         , default_transmit_buffer_(*this, buffer_transfer_count)
         , tick_thread_transmit_buffer_(*this, buffer_transfer_count)
@@ -35,8 +35,8 @@ public:
         , operation_thread_id_(std::this_thread::get_id())
         , storage_unit_count_(storage_unit_count)
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
-        , tick_thread_([this](const std::stop_token& stop_token) { tick_thread_main(stop_token); })
-        , index_to_storage_id_(index_to_storage_id) {}
+        , tick_thread_(
+              [this](const std::stop_token& stop_token) { tick_thread_main(stop_token); }) {}
 
     ~Impl() { stop_handling_events(); };
 
@@ -50,6 +50,8 @@ public:
         //                                                                                : 8),
         //     (int)info.policy);
         storage_[storage_id].info = info;
+        IndexMapKey index{.index = info.index, .sub_index = info.sub_index};
+        index_storage_map_[std::bit_cast<uint32_t>(index)] = &storage_[storage_id];
     }
 
     void read_async_unchecked(int storage_id) {
@@ -335,10 +337,7 @@ private:
         const auto& data = *reinterpret_cast<protocol::sdo::ReadResultSuccess<T>*>(pointer);
         pointer += sizeof(data);
 
-        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
-        if (storage_id < 0) [[unlikely]]
-            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
-        auto& storage = storage_[storage_id];
+        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
         auto operation = storage.operation.load(std::memory_order::acquire);
         if (operation.mode == Operation::Mode::NONE) [[unlikely]]
@@ -368,19 +367,15 @@ private:
         const auto& data = *reinterpret_cast<protocol::sdo::ReadResultError*>(pointer);
         pointer += sizeof(data);
 
-        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
-        if (storage_id < 0)
-            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
+        (void)storage;
     }
 
     void read_sdo_operation_write_success(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::WriteResultSuccess*>(pointer);
         pointer += sizeof(data);
 
-        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
-        if (storage_id < 0)
-            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
-        auto& storage = storage_[storage_id];
+        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
         auto operation = storage.operation.load(std::memory_order::acquire);
         if (operation.mode == Operation::Mode::NONE) [[unlikely]]
@@ -396,10 +391,7 @@ private:
         const auto& data = *reinterpret_cast<protocol::sdo::WriteResultError*>(pointer);
         pointer += sizeof(data);
 
-        int storage_id = index_to_storage_id_(data.header.index, data.header.sub_index);
-        if (storage_id < 0)
-            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
-        auto& storage = storage_[storage_id];
+        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
         auto operation = storage.operation.load(std::memory_order::acquire);
         if (operation.mode == Operation::Mode::NONE) [[unlikely]]
@@ -409,6 +401,14 @@ private:
             operation.state = Operation::State::WRITING_CONFIRMING;
             storage.operation.store(operation, std::memory_order::relaxed);
         }
+    }
+
+    StorageUnit& find_storage_by_index(uint16_t index, uint8_t sub_index) {
+        auto it = index_storage_map_.find(
+            std::bit_cast<uint32_t>(IndexMapKey{.index = index, .sub_index = sub_index}));
+        if (it == index_storage_map_.end())
+            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+        return *it->second;
     }
 
     void tick_thread_main(const std::stop_token& token) {
@@ -505,18 +505,22 @@ private:
 
     size_t storage_unit_count_;
     std::unique_ptr<StorageUnit[]> storage_;
-    std::jthread tick_thread_;
 
-    int (*index_to_storage_id_)(uint16_t, uint8_t);
+    struct IndexMapKey {
+        uint16_t index;
+        uint8_t sub_index;
+        const uint8_t padding = 0;
+    };
+    std::map<uint32_t, StorageUnit*> index_storage_map_;
+
+    std::jthread tick_thread_;
 };
 
 API Handler::Handler(
-    uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count,
-    int (*index_to_storage_id)(uint16_t, uint8_t)) {
+    uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count, size_t storage_unit_count) {
     static_assert(impl_align == alignof(Handler::Impl));
     static_assert(sizeof(impl_) == sizeof(Handler::Impl));
-    new (impl_)
-        Impl{usb_vid, usb_pid, buffer_transfer_count, storage_unit_count, index_to_storage_id};
+    new (impl_) Impl{usb_vid, usb_pid, buffer_transfer_count, storage_unit_count};
 }
 
 API Handler::~Handler() { std::destroy_at(reinterpret_cast<Impl*>(impl_)); }
