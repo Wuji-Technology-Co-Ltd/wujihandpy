@@ -105,10 +105,10 @@ wujihandcpp::device::Hand hand{usb_vid, usb_pid};
 
 定义一个 `Hand` 对象，并传入其 USB VID 和 PID 即可连接。
 
-在目前的固件实现中，所有灵巧手的 VID 固定为 `0x0483`，PID 固定为 `0x5740`：
+在目前的固件实现中，所有灵巧手的 VID 固定为 `0x0483`，PID 固定为 `0x7530`：
 
 ```cpp
-wujihandcpp::device::Hand hand{0x0483, 0x5740};
+wujihandcpp::device::Hand hand{0x0483, 0x7530};
 ```
 
 ### 读数据
