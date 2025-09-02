@@ -11,33 +11,53 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
-
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build release package (${{ matrix.arch }})
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
           file: Dockerfile.package-builder
           outputs: type=local,dest=package-build/
-          cache-from: type=gha,scope=release-build
-          cache-to: type=gha,mode=max,scope=release-build
+          cache-from: type=gha,scope=release-build-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-build-${{ matrix.arch }}
 
       - name: List built packages
         run: find package-build/*
+
+      - name: Upload built packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.arch }}
+          path: |
+            package-build/*.deb
+            package-build/*.rpm
+            package-build/*.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Extract git tag & generate change log
         run: |
@@ -46,6 +66,16 @@ jobs:
           echo "Using git tag: $GIT_TAG"
           docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog $GIT_TAG > changelog.md
           cat changelog.md
+
+      - name: Download all built packages
+        uses: actions/download-artifact@v4
+        with:
+          path: package-build/
+          pattern: package-*
+          merge-multiple: true
+
+      - name: List built packages
+        run: find package-build/*
 
       - name: Create Release
         id: create_release
@@ -58,9 +88,6 @@ jobs:
           prerelease: ${{ github.ref_type != 'tag' }}
           make_latest: ${{ github.ref_type == 'tag' }}
           files: |
-            package-build/linux_amd64/*.deb
-            package-build/linux_amd64/*.rpm
-            package-build/linux_amd64/*.zip
-            package-build/linux_arm64/*.deb
-            package-build/linux_arm64/*.rpm
-            package-build/linux_arm64/*.zip
+            package-build/*.deb
+            package-build/*.rpm
+            package-build/*.zip
