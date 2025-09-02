@@ -20,7 +20,7 @@ int main() {
 
     device::Hand hand{0x0483, 0x7530};
 
-    // Set control mode & enable whole hand
+    // Set control mode & enable all joints
     hand.write<data::joint::ControlMode>(2);
     hand.write<data::joint::ControlWord>(1);
 

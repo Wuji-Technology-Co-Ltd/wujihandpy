@@ -22,7 +22,7 @@ int main() {
     // Set control mode
     hand.write<data::joint::ControlMode>(2);
 
-    // Enable whole hand
+    // Enable all joints
     hand.write<data::joint::ControlWord>(1);
 
     // Return all joints to initial point
