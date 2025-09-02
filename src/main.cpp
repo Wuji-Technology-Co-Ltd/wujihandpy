@@ -13,7 +13,7 @@ PYBIND11_MODULE(_core, m) {
     using Hand = Wrapper<wujihandcpp::device::Hand>;
     auto hand = py::class_<Hand>(m, "Hand");
     hand.def(
-        py::init<uint16_t, int32_t>(), py::arg("usb_vid") = 0x0483, py::arg("usb_pid") = 0x5740);
+        py::init<uint16_t, int32_t>(), py::arg("usb_vid") = 0x0483, py::arg("usb_pid") = 0x7530);
 
     Hand::register_py_interface<data::hand::FirmwareVersion>(hand, "firmware_version");
     Hand::register_py_interface<data::hand::FirmwareDate>(hand, "firmware_date");
@@ -30,8 +30,15 @@ PYBIND11_MODULE(_core, m) {
     Hand::register_py_interface<data::joint::ControlWord>(hand, "joint_control_word");
     Hand::register_py_interface<data::joint::Position>(hand, "joint_position");
     Hand::register_py_interface<data::joint::ControlPosition>(hand, "joint_control_position");
+    Hand::register_py_interface<data::joint::UpperLimit>(hand, "joint_upper_limit");
+    Hand::register_py_interface<data::joint::LowerLimit>(hand, "joint_lower_limit");
 
-    hand.def("pdo_write_unchecked", &Hand::pdo_write_unchecked);
+    hand.def(
+        "pdo_write_unchecked",
+        py::overload_cast<py::numpy_scalar<double>>(&Hand::pdo_write_unchecked));
+    hand.def(
+        "pdo_write_unchecked",
+        py::overload_cast<const py::array_t<double>&>(&Hand::pdo_write_unchecked));
 
     using Finger = Wrapper<wujihandcpp::device::Finger>;
     auto finger = py::class_<Finger>(m, "Finger");
@@ -42,6 +49,8 @@ PYBIND11_MODULE(_core, m) {
     Finger::register_py_interface<data::joint::ControlWord>(finger, "joint_control_word");
     Finger::register_py_interface<data::joint::Position>(finger, "joint_position");
     Finger::register_py_interface<data::joint::ControlPosition>(finger, "joint_control_position");
+    Finger::register_py_interface<data::joint::UpperLimit>(finger, "joint_upper_limit");
+    Finger::register_py_interface<data::joint::LowerLimit>(finger, "joint_lower_limit");
 
     using Joint = Wrapper<wujihandcpp::device::Joint>;
     auto joint = py::class_<Joint>(m, "Joint");
@@ -52,4 +61,6 @@ PYBIND11_MODULE(_core, m) {
     Joint::register_py_interface<data::joint::ControlWord>(joint, "joint_control_word");
     Joint::register_py_interface<data::joint::Position>(joint, "joint_position");
     Joint::register_py_interface<data::joint::ControlPosition>(joint, "joint_control_position");
+    Joint::register_py_interface<data::joint::UpperLimit>(joint, "joint_upper_limit");
+    Joint::register_py_interface<data::joint::LowerLimit>(joint, "joint_lower_limit");
 }

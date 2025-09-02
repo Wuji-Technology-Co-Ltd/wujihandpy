@@ -78,7 +78,7 @@ public:
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
-            if (array.ndim() != 1 || array.shape()[1] != 4)
+            if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (ssize_t j = 0; j < 4; j++)
@@ -128,7 +128,7 @@ public:
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
-            if (array.ndim() != 1 || array.shape()[1] != 4)
+            if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (ssize_t j = 0; j < 4; j++)
@@ -157,7 +157,7 @@ public:
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
-            if (array.ndim() != 1 || array.shape()[1] != 4)
+            if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (ssize_t j = 0; j < 4; j++)
@@ -210,14 +210,27 @@ public:
         return py::array_t<ValueType>({5, 4}, buffer, free);
     }
 
-    void pdo_write_unchecked(const py::array_t<int32_t>& array) {
+    void pdo_write_unchecked(py::numpy_scalar<double> value) {
+        double control_positions[5][4];
+        for (auto& finger : control_positions)
+            for (auto& joint : finger)
+                joint = value.value;
+
+        static std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - begin);
+
+        T::pdo_write_async_unchecked(control_positions, static_cast<uint32_t>(duration.count()));
+    }
+
+    void pdo_write_unchecked(const py::array_t<double>& array) {
         if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
             throw std::runtime_error("Array shape must be {5, 4}!");
 
         static std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - begin);
-        auto control_positions = reinterpret_cast<const int32_t (*)[5][4]>(array.request().ptr);
+        auto control_positions = reinterpret_cast<const double (*)[5][4]>(array.request().ptr);
 
         T::pdo_write_async_unchecked(*control_positions, static_cast<uint32_t>(duration.count()));
     }

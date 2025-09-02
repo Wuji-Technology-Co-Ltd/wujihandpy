@@ -14,38 +14,39 @@ def main():
 
 
 def run(hand: wujihandpy.Hand):
-    # Set control mode
+    # Set control mode to PP (Point to Point Mode)
     hand.write_joint_control_mode(np.uint16(2))
 
-    # Enable whole hand
+    # Enable all joints
     hand.write_joint_control_word(np.uint16(1))
 
     # Return all joints to initial point
     hand.write_joint_control_position(
         np.array(
             [
-                #   J1        J2        J3        J4
-                [0x200000, 0x200000, 0x200000, 0x200000],  # F1
-                [0xDFFFFF, 0xBFFFFF, 0x400000, 0x600000],  # F2
-                [0xDFFFFF, 0x900000, 0x400000, 0x600000],  # F3
-                [0xDFFFFF, 0x600000, 0x400000, 0x600000],  # F4
-                [0xDFFFFF, 0x400000, 0x400000, 0x600000],  # F5
+                # J1    J2    J3    J4
+                [+0.0, +0.0, +0.0, +0.0],  # F1
+                [+0.0, +0.1, +0.0, +0.0],  # F2
+                [+0.0, +0.0, +0.0, +0.0],  # F3
+                [+0.0, +0.0, +0.0, +0.0],  # F4
+                [+0.0, -0.1, +0.0, +0.0],  # F5
             ],
-            dtype=np.int32,
+            dtype=np.float64,
         )
     )
 
     # Wait for joints to move into place
     time.sleep(0.5)
 
-    # Disable non-middle fingers & each J2
+    # Disable non-middle fingers
+    # [5 = Disabled, 1 = Enabled]
     hand.write_joint_control_word(
         np.array(
             [
-                #J1 J2 J3 J4
+                # J1J2 J3J4
                 [5, 5, 5, 5],  # F1
                 [5, 5, 5, 5],  # F2
-                [1, 5, 1, 1],  # F3
+                [1, 1, 1, 1],  # F3
                 [5, 5, 5, 5],  # F4
                 [5, 5, 5, 5],  # F5
             ],
@@ -59,21 +60,18 @@ def run(hand: wujihandpy.Hand):
 
     x = 0.0
     while True:
-        x += math.pi / update_rate
-        y = (math.cos(x) + 1.0) / 2.0
-
-        pos_increase = np.int32(round(0xFFFFFF * y))
-        pos_decrease = np.int32(0xFFFFFF - pos_increase)
+        y = (1 - math.cos(x)) * 0.8
 
         # Control middle finger
-        hand.finger(2).write_joint_control_position(
+        hand.finger(2).write_joint_control_position_unchecked(
             np.array(
-                #     J1      J2       J3            J4
-                [pos_increase, 0, pos_decrease, pos_decrease],
-                dtype=np.int32,
+                # J1J2 J3J4
+                [y, 0, y, y],
+                dtype=np.float64,
             )
         )
 
+        x += math.pi / update_rate
         time.sleep(update_period)
 
 

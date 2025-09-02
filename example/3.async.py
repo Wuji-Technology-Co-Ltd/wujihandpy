@@ -14,24 +14,24 @@ async def main():
 
 
 async def run(hand: wujihandpy.Hand):
-    # Set control mode
+    # Set control mode (PP)
     await hand.write_joint_control_mode_async(np.uint16(2))
 
-    # Enable whole hand
+    # Enable all joints
     await hand.write_joint_control_word_async(np.uint16(1))
 
     # Return all joints to initial point
     await hand.write_joint_control_position_async(
         np.array(
             [
-                #   J1        J2        J3        J4
-                [0x200000, 0x200000, 0x200000, 0x200000],  # F1
-                [0xDFFFFF, 0xBFFFFF, 0x400000, 0x600000],  # F2
-                [0xDFFFFF, 0x900000, 0x400000, 0x600000],  # F3
-                [0xDFFFFF, 0x600000, 0x400000, 0x600000],  # F4
-                [0xDFFFFF, 0x400000, 0x400000, 0x600000],  # F5
+                # J1    J2    J3    J4
+                [+0.0, +0.0, +0.0, +0.0],  # F1
+                [+0.0, +0.1, +0.0, +0.0],  # F2
+                [+0.0, +0.0, +0.0, +0.0],  # F3
+                [+0.0, +0.0, +0.0, +0.0],  # F4
+                [+0.0, -0.1, +0.0, +0.0],  # F5
             ],
-            dtype=np.int32,
+            dtype=np.float64,
         )
     )
 
@@ -42,7 +42,7 @@ async def run(hand: wujihandpy.Hand):
     await hand.write_joint_control_word_async(
         np.array(
             [
-                # J1 J2 J3 J4
+                # J1J2 J3J4
                 [5, 5, 5, 5],  # F1
                 [1, 5, 1, 1],  # F2
                 [1, 5, 1, 1],  # F3
@@ -62,21 +62,18 @@ async def shake(x: float, finger: wujihandpy.Finger):
     update_period = 1.0 / update_rate
 
     while True:
-        x += math.pi / update_rate
-        y = (math.cos(x) + 1.0) / 2.0
+        y = (1 - math.cos(x)) * 0.8
 
-        pos_increase = np.int32(round(0xFFFFFF * y))
-        pos_decrease = np.int32(0xFFFFFF - pos_increase)
-
-        # Control finger
-        finger.write_joint_control_position(
+        # Control middle finger
+        await finger.write_joint_control_position_async(
             np.array(
-                #     J1      J2       J3            J4
-                [pos_increase, 0, pos_decrease, pos_decrease],
-                dtype=np.int32,
+                # J1J2 J3J4
+                [y, 0, y, y],
+                dtype=np.float64,
             )
         )
 
+        x += math.pi / update_rate
         await asyncio.sleep(update_period)
 
 
