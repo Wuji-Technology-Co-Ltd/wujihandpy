@@ -15,7 +15,7 @@ pip install wujihandpy
 对于 Linux 用户，需要额外配置 udev 规则以允许非 root 用户访问 USB 设备，可在终端中输入：
 
 ```bash
-echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0666"' |
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="0483", MODE="0666"' |
 sudo tee /etc/udev/rules.d/95-wujihand.rules &&
 sudo udevadm control --reload-rules &&
 sudo udevadm trigger
