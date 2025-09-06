@@ -20,6 +20,8 @@ struct ControlMode : WriteOnlyData<device::Joint, 0x02, 1, uint16_t> {};
 
 struct SinLevel : WriteOnlyData<device::Joint, 0x05, 8, uint16_t> {};
 
+struct CurrentLimit : WriteOnlyData<device::Joint, 0x07, 2, uint16_t> {};
+
 struct ControlWord : WriteOnlyData<device::Joint, 0x40, 0, uint16_t> {};
 
 namespace internal {

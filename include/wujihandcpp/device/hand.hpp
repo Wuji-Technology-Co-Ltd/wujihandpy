@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <limits>
 #include <stdexcept>
 
 #include "wujihandcpp/data/hand.hpp"
+#include "wujihandcpp/data/joint.hpp"
 #include "wujihandcpp/device/data_operator.hpp"
 #include "wujihandcpp/device/data_tuple.hpp"
 #include "wujihandcpp/device/finger.hpp"
@@ -22,6 +22,7 @@ public:
     Hand(uint16_t usb_vid, int32_t usb_pid, size_t buffer_transfer_count = 64)
         : handler_(usb_vid, usb_pid, buffer_transfer_count, data_count()) {
         init_storage_info();
+        write<data::joint::CurrentLimit>(1000);
     };
 
     Finger finger_thumb() { return finger(0); }

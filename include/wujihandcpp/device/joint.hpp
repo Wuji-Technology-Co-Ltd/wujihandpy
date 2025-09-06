@@ -21,9 +21,9 @@ private:
         , storage_offset_(storage_offset) {}
 
     using Datas = DataTuple<
-        data::joint::ControlMode, data::joint::SinLevel, data::joint::ControlWord,
-        data::joint::Position, data::joint::ControlPosition, data::joint::UpperLimit,
-        data::joint::LowerLimit>;
+        data::joint::ControlMode, data::joint::SinLevel, data::joint::CurrentLimit,
+        data::joint::ControlWord, data::joint::Position, data::joint::ControlPosition,
+        data::joint::UpperLimit, data::joint::LowerLimit>;
 
     protocol::Handler& handler_;
     uint16_t index_offset_;
