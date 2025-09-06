@@ -27,6 +27,7 @@ PYBIND11_MODULE(_core, m) {
 
     Hand::register_py_interface<data::joint::ControlMode>(hand, "joint_control_mode");
     Hand::register_py_interface<data::joint::SinLevel>(hand, "joint_sin_level");
+    Hand::register_py_interface<data::joint::CurrentLimit>(hand, "joint_current_limit");
     Hand::register_py_interface<data::joint::ControlWord>(hand, "joint_control_word");
     Hand::register_py_interface<data::joint::Position>(hand, "joint_position");
     Hand::register_py_interface<data::joint::ControlPosition>(hand, "joint_control_position");
@@ -46,6 +47,7 @@ PYBIND11_MODULE(_core, m) {
 
     Finger::register_py_interface<data::joint::ControlMode>(finger, "joint_control_mode");
     Finger::register_py_interface<data::joint::SinLevel>(finger, "joint_sin_level");
+    Finger::register_py_interface<data::joint::CurrentLimit>(finger, "joint_current_limit");
     Finger::register_py_interface<data::joint::ControlWord>(finger, "joint_control_word");
     Finger::register_py_interface<data::joint::Position>(finger, "joint_position");
     Finger::register_py_interface<data::joint::ControlPosition>(finger, "joint_control_position");
@@ -58,6 +60,7 @@ PYBIND11_MODULE(_core, m) {
 
     Joint::register_py_interface<data::joint::ControlMode>(joint, "joint_control_mode");
     Joint::register_py_interface<data::joint::SinLevel>(joint, "joint_sin_level");
+    Joint::register_py_interface<data::joint::CurrentLimit>(joint, "joint_current_limit");
     Joint::register_py_interface<data::joint::ControlWord>(joint, "joint_control_word");
     Joint::register_py_interface<data::joint::Position>(joint, "joint_position");
     Joint::register_py_interface<data::joint::ControlPosition>(joint, "joint_control_position");
