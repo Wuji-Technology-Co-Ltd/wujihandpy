@@ -15,10 +15,16 @@ async def main():
 
 async def run(hand: wujihandpy.Hand):
     # Set control mode (PP)
+    print("00000")
     await hand.write_joint_control_mode_async(np.uint16(2))
 
+    print("11111")
     # Enable all joints
-    await hand.write_joint_control_word_async(np.uint16(1))
+    await hand.finger(1).write_joint_control_word_async(
+        np.int16(1)
+    )
+
+    print("22222")
 
     # Return all joints to initial point
     await hand.write_joint_control_position_async(
@@ -39,16 +45,9 @@ async def run(hand: wujihandpy.Hand):
     await asyncio.sleep(0.5)
 
     # Disable unnecessary joints
-    await hand.write_joint_control_word_async(
+    await hand.finger(1).write_joint_control_word_async(
         np.array(
-            [
-                # J1J2 J3J4
-                [5, 5, 5, 5],  # F1
-                [1, 5, 1, 1],  # F2
-                [1, 5, 1, 1],  # F3
-                [5, 5, 5, 5],  # F4
-                [5, 5, 5, 5],  # F5
-            ],
+            [1,5,1,1],
             dtype=np.uint16,
         )
     )
@@ -75,7 +74,6 @@ async def shake(x: float, finger: wujihandpy.Finger):
 
         x += math.pi / update_rate
         await asyncio.sleep(update_period)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,0 +1,26 @@
+retargeting:
+  type: vector
+  urdf_path: /home/uji/Robben_ws/wujihandpy/visionpro_control/urdf/wujihand_left.urdf
+
+  # Target = robot hand (from your URDF)
+  # In this model, the palm/wrist link is named "base_link"
+  target_origin_link_names: [ "base_link", "base_link", "base_link", "base_link", "base_link",
+                              "base_link", "base_link", "base_link", "base_link", "base_link",
+                              "base_link", "base_link", "base_link", "base_link" ]
+
+  # Fingertips (tip) and the preceding distal links (middle)
+  # thumb: IP_thumb -> fingertip_thumb
+  # fingers: DIP_*  -> fingertip_*
+  target_task_link_names: [ "fingertip_thumb", "fingertip_index", "fingertip_middle",
+                            "fingertip_ring", "fingertip_pinky",
+                            "IP_thumb", "DIP_index", "DIP_middle", "DIP_ring", "DIP_pinky",
+                            "PIP_index", "PIP_middle", "PIP_ring", "PIP_pinky" ]
+
+  scaling_factor: 1.2
+
+  # Source = human hand indices (same pattern as your example, now extended)
+  target_link_human_indices: [ [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+                               [ 4, 8, 12, 16, 20, 2, 6, 10, 14, 18, 5, 9, 13, 17 ] ]
+
+  # Smoothing (lower alpha = stronger filtering)
+  low_pass_alpha: 0.2

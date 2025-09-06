@@ -1,0 +1,1478 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="d5_right_hands_tips">
+  <link name="world"/>
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin rpy="0 1.5708 1.5708" xyz="0 0 0"/>
+  </joint>
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.0362817338745931 0.00305496700238872 0.00012652308364822"
+        rpy="0 0 0" />
+      <mass
+        value="0.100729456637226" />
+      <inertia
+        ixx="3.4903252403848E-05"
+        ixy="3.96057729338568E-06"
+        ixz="3.90665622578165E-06"
+        iyy="8.05762092877759E-05"
+        iyz="-1.48869914829573E-06"
+        izz="5.43177642836552E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.627450980392157 0.627450980392157 0.627450980392157 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="CMC_joint">
+    <inertial>
+      <origin
+        xyz="-0.00771367823748027 0.00183231505544754 -0.00219639202089756"
+        rpy="0 0 0" />
+      <mass
+        value="0.00125785735605691" />
+      <inertia
+        ixx="3.83658914941671E-08"
+        ixy="2.36460489065714E-09"
+        ixz="-1.03477166087723E-08"
+        iyy="6.98856638200257E-08"
+        iyz="4.39609465963975E-09"
+        izz="6.35623703634476E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/CMC_joint.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/CMC_joint.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F1J1"
+    type="revolute">
+    <origin
+      xyz="-0.0287119473549832 -0.00852444239874984 0.0205754013367985"
+      rpy="1.6609493542778 0.89646815577158 1.20388201170241" />
+    <parent
+      link="base_link" />
+    <child
+      link="CMC_joint" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.0448"
+      upper="1.6508"
+      effort="0.6"
+      velocity="8.58701992" />
+  </joint>
+  <link
+    name="CMC_2rd">
+    <inertial>
+      <origin
+        xyz="-0.0134830077074653 0.000922867497252785 0.00666084414044431"
+        rpy="0 0 0" />
+      <mass
+        value="0.00526815598427129" />
+      <inertia
+        ixx="1.98041865895015E-07"
+        ixy="-2.04696420847067E-09"
+        ixz="1.36339106542372E-07"
+        iyy="5.57505650011452E-07"
+        iyz="5.09367453567155E-09"
+        izz="4.90755198783683E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/CMC_2rd.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/CMC_2rd.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F1J2"
+    type="revolute">
+    <origin
+      xyz="-0.0145598308576187 0.00383358648575016 -0.00576550871894678"
+      rpy="-0.0914928971126661 -0.705739837158521 -0.493269803017064" />
+    <parent
+      link="CMC_joint" />
+    <child
+      link="CMC_2rd" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-0.1659"
+      upper="0.9339"
+      effort="0.6"
+      velocity="11.10029404" />
+  </joint>
+  <link
+    name="MCP_thumb">
+    <inertial>
+      <origin
+        xyz="-0.0127840160194441 0.00137060752652221 -1.60835271583726E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.00451776533982589" />
+      <inertia
+        ixx="1.22993633397689E-07"
+        ixy="-9.34843505762833E-10"
+        ixz="3.60535709302834E-10"
+        iyy="3.89429239539063E-07"
+        iyz="-1.24481110371496E-11"
+        izz="3.80198753757361E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_thumb.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_thumb.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F1J3"
+    type="revolute">
+    <origin
+      xyz="-0.030766 -5.5784E-05 0.012586"
+      rpy="0.33819 0.32765 7.0074E-05" />
+    <parent
+      link="CMC_2rd" />
+    <child
+      link="MCP_thumb" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="12.86307659" />
+  </joint>
+  <link
+    name="IP_thumb">
+    <inertial>
+      <origin
+        xyz="-0.0087334 0.0011845 0.00023663"
+        rpy="0 0 0" />
+      <mass
+        value="0.0032446" />
+      <inertia
+        ixx="8.4532E-08"
+        ixy="-2.2214E-09"
+        ixz="3.7893E-10"
+        iyy="1.5393E-07"
+        iyz="-5.1545E-11"
+        izz="1.5756E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/IP_thumb.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078 0.96078 0.96471 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/IP_thumb.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F1J4"
+    type="revolute">
+    <origin
+      xyz="-0.0289946553564469 0.000556723643987157 -0.000250000742295356"
+      rpy="0 0 -0.0191986217719369" />
+    <parent
+      link="MCP_thumb" />
+    <child
+      link="IP_thumb" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="13.57866158" />
+  </joint>
+  <link
+    name="fingertip_thumb">
+    <inertial>
+      <origin
+        xyz="0.0066049 0.00028788 1.5879E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.0014852" />
+      <inertia
+        ixx="3.7035E-08"
+        ixy="1.4632E-09"
+        ixz="-1.0485E-12"
+        iyy="2.9544E-08"
+        iyz="-1.5545E-12"
+        izz="2.9178E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_thumb.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078 0.96078 0.96471 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_thumb.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="thumb_fingertip_fixed"
+    type="fixed">
+    <origin
+      xyz="-0.0293000002212205 0.00105000183074177 0.000250000081465665"
+      rpy="0 0 0" />
+    <parent
+      link="IP_thumb" />
+    <child
+      link="fingertip_thumb" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="MCP_joint_index">
+    <inertial>
+      <origin
+        xyz="-0.000319915345639632 0.0013292473539805 -6.02704366969853E-09"
+        rpy="0 0 0" />
+      <mass
+        value="0.000379035353628356" />
+      <inertia
+        ixx="9.06832631392797E-09"
+        ixy="-2.97882532906538E-09"
+        ixz="4.85702461963548E-14"
+        iyy="9.76761312855595E-09"
+        iyz="3.96398496940897E-14"
+        izz="8.49904595332904E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_index.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.796078431372549 0.796078431372549 0.796078431372549 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_index.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F2J1"
+    type="revolute">
+    <origin
+      xyz="-0.0919165306699503 0.00587008921482919 0.0294338632809185"
+      rpy="0.219360935022254 0.123470682741789 -0.0454105657545556" />
+    <parent
+      link="base_link" />
+    <child
+      link="MCP_joint_index" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.32695"
+      upper="1.63595"
+      effort="1.0"
+      velocity="8.203047484" />
+  </joint>
+  <link
+    name="PIPMCP_2rd_index">
+    <inertial>
+      <origin
+        xyz="-0.0174056343115065 0.00607488397988235 7.02482116618497E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00657987209047657" />
+      <inertia
+        ixx="1.7465205113407E-07"
+        ixy="-3.15693138574795E-08"
+        ixz="2.88424518328892E-10"
+        iyy="9.45057722967349E-07"
+        iyz="1.65534905120413E-11"
+        izz="9.50286012403269E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_index.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_index.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F2J2"
+    type="revolute">
+    <origin
+      xyz="-0.00400000572579078 -0.00220000016539656 0"
+      rpy="0 0 0" />
+    <parent
+      link="MCP_joint_index" />
+    <child
+      link="PIPMCP_2rd_index" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.495"
+      upper="0.495"
+      effort="0.2"
+      velocity="8.115781022" />
+  </joint>
+  <link
+    name="DIP_index">
+    <inertial>
+      <origin
+        xyz="-0.015509 0.0011228 4.7032E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.0045089" />
+      <inertia
+        ixx="1.2298E-07"
+        ixy="9.5176E-09"
+        ixz="-3.4196E-10"
+        iyy="3.9711E-07"
+        iyz="4.8839E-12"
+        izz="3.8791E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_index.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078 0.96078 0.96471 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_index.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F2J3"
+    type="revolute">
+    <origin
+      xyz="-0.0366176824738114 0.00460000000550533 1.55808514892761E-05"
+      rpy="0 0.000433200557103518 0" />
+    <parent
+      link="PIPMCP_2rd_index" />
+    <child
+      link="DIP_index" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="12.86307659" />
+  </joint>
+  <link
+    name="tipmount_index">
+    <inertial>
+      <origin
+        xyz="-0.00535172524642188 0.00089436496945188 1.70711126226131E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.00137453055479477" />
+      <inertia
+        ixx="4.05616296493333E-08"
+        ixy="1.59318598079109E-09"
+        ixz="-8.52615637488302E-11"
+        iyy="4.97882764363257E-08"
+        iyz="-8.94156273384709E-12"
+        izz="3.5113134946145E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_index.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_index.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F2J4"
+    type="revolute">
+    <origin
+      xyz="-0.0290000000150093 0 0"
+      rpy="0.000268594994177152 0 0" />
+    <parent
+      link="DIP_index" />
+    <child
+      link="tipmount_index" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="13.57866158" />
+  </joint>
+  <link
+    name="fingertip_index">
+    <inertial>
+      <origin
+        xyz="0.00986632612758262 0.000242707786630898 -4.82080605827828E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00199522849792143" />
+      <inertia
+        ixx="4.72379097011826E-08"
+        ixy="2.39112277288104E-09"
+        ixz="1.69309900729916E-11"
+        iyy="5.39285646069128E-08"
+        iyz="7.66841379098212E-13"
+        izz="5.31235878371183E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_index.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_index.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="index_fingertip_fixed"
+    type="fixed">
+    <origin
+      xyz="-0.0267000004409279 0.00104999554055549 0"
+      rpy="0 0 0" />
+    <parent
+      link="tipmount_index" />
+    <child
+      link="fingertip_index" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="MCP_joint_middle">
+    <inertial>
+      <origin
+        xyz="-0.000319986440870293 0.00132924961618549 2.64397394507745E-08"
+        rpy="0 0 0" />
+      <mass
+        value="0.000379026804644953" />
+      <inertia
+        ixx="9.06823623278671E-09"
+        ixy="-2.97885670449321E-09"
+        ixz="7.91952968540631E-14"
+        iyy="9.76751641414407E-09"
+        iyz="4.99563335618183E-14"
+        izz="8.49899334520404E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_middle.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.796078431372549 0.796078431372549 0.796078431372549 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_middle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F3J1"
+    type="revolute">
+    <origin
+      xyz="-0.0895435117703842 0.0104597238611381 0.00746146014384912"
+      rpy="-0.000581649931470466 0 -0.0872664772858757" />
+    <parent
+      link="base_link" />
+    <child
+      link="MCP_joint_middle" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.32695"
+      upper="1.63595"
+      effort="1.0"
+      velocity="8.203047484" />
+  </joint>
+  <link
+    name="PIPMCP_2rd_middle">
+    <inertial>
+      <origin
+        xyz="-0.0174056342595395 0.00607488445872796 7.02692052072153E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00657987205231713" />
+      <inertia
+        ixx="1.74652044557727E-07"
+        ixy="-3.15693167149104E-08"
+        ixz="2.88428960333597E-10"
+        iyy="9.45057745600407E-07"
+        iyz="1.65899504968349E-11"
+        izz="9.50286007732317E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_middle.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_middle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F3J2"
+    type="revolute">
+    <origin
+      xyz="-0.00400000560823693 -0.00220000049330705 0"
+      rpy="0 0 0" />
+    <parent
+      link="MCP_joint_middle" />
+    <child
+      link="PIPMCP_2rd_middle" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.495"
+      upper="0.495"
+      effort="0.2"
+      velocity="8.115781022" />
+  </joint>
+  <link
+    name="DIP_middle">
+    <inertial>
+      <origin
+        xyz="-0.0155093917108602 0.0011227921077806 4.7178197170256E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00450884845157686" />
+      <inertia
+        ixx="1.22978069443671E-07"
+        ixy="9.51784776119409E-09"
+        ixz="-3.4206580561171E-10"
+        iyy="3.97108495741243E-07"
+        iyz="5.4409956538135E-12"
+        izz="3.87914531389682E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_middle.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_middle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F3J3"
+    type="revolute">
+    <origin
+      xyz="-0.0366176824738062 0.00460000000550358 1.55808609508257E-05"
+      rpy="0 0.000433200815469852 0" />
+    <parent
+      link="PIPMCP_2rd_middle" />
+    <child
+      link="DIP_middle" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="12.86307659" />
+  </joint>
+  <link
+    name="tipmount_middle">
+    <inertial>
+      <origin
+        xyz="-0.0053517 0.00089435 1.7077E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.0013745" />
+      <inertia
+        ixx="4.0562E-08"
+        ixy="1.5933E-09"
+        ixz="-8.5268E-11"
+        iyy="4.9788E-08"
+        iyz="-8.7813E-12"
+        izz="3.5113E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_middle.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078 0.96078 0.96471 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_middle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F3J4"
+    type="revolute">
+    <origin
+      xyz="-0.02900000001501 0 0"
+      rpy="0.000268594994184729 0 0" />
+    <parent
+      link="DIP_middle" />
+    <child
+      link="tipmount_middle" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="13.57866158" />
+  </joint>
+  <link
+    name="fingertip_middle">
+    <inertial>
+      <origin
+        xyz="0.00986638359121364 0.000242762610506316 -4.82391756106981E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00199520868827841" />
+      <inertia
+        ixx="4.72376609188702E-08"
+        ixy="2.39144459535487E-09"
+        ixz="1.72654134777292E-11"
+        iyy="5.39280650546202E-08"
+        iyz="9.82832195511379E-13"
+        izz="5.31222348014556E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_middle.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_middle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="fingertip_middle_fixed"
+    type="fixed">
+    <origin
+      xyz="-0.0267000004204019 0.00104999549760285 0"
+      rpy="0 0 0" />
+    <parent
+      link="tipmount_middle" />
+    <child
+      link="fingertip_middle" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="MCP_joint_ring">
+    <inertial>
+      <origin
+        xyz="-0.00031999918604278 0.00132924338232786 3.2850746424333E-08"
+        rpy="0 0 0" />
+      <mass
+        value="0.000379025355832582" />
+      <inertia
+        ixx="9.06823252983838E-09"
+        ixy="-2.97884887246427E-09"
+        ixz="6.65103640804393E-14"
+        iyy="9.76748699064776E-09"
+        iyz="4.64936659994173E-14"
+        izz="8.49897500230578E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_ring.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.796078431372549 0.796078431372549 0.796078431372549 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_ring.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F4J1"
+    type="revolute">
+    <origin
+      xyz="-0.084429 0.0076649 -0.013712"
+      rpy="-0.047172 -0.094201 -0.079087" />
+    <parent
+      link="base_link" />
+    <child
+      link="MCP_joint_ring" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.32695"
+      upper="1.63595"
+      effort="1.0"
+      velocity="8.203047484" />
+  </joint>
+  <link
+    name="PIPMCP_2rd_ring">
+    <inertial>
+      <origin
+        xyz="-0.0174056342214865 0.00607488384657669 7.02737726518236E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00657987216683894" />
+      <inertia
+        ixx="1.74652051234683E-07"
+        ixy="-3.15693177401151E-08"
+        ixz="2.8842952520371E-10"
+        iyy="9.45057727225164E-07"
+        iyz="1.65999842364779E-11"
+        izz="9.50286004918523E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_ring.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_ring.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F4J2"
+    type="revolute">
+    <origin
+      xyz="-0.004 -0.0022 0"
+      rpy="0 0 0" />
+    <parent
+      link="MCP_joint_ring" />
+    <child
+      link="PIPMCP_2rd_ring" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.495"
+      upper="0.495"
+      effort="0.2"
+      velocity="8.115781022" />
+  </joint>
+  <link
+    name="DIP_ring">
+    <inertial>
+      <origin
+        xyz="-0.0155093918610879 0.00112278782586408 4.73413024819173E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00450885216725925" />
+      <inertia
+        ixx="1.22978124780883E-07"
+        ixy="9.51793054890693E-09"
+        ixz="-3.42239631462505E-10"
+        iyy="3.97108869387128E-07"
+        iyz="5.91935003171753E-12"
+        izz="3.87914639814856E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_ring.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_ring.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F4J3"
+    type="revolute">
+    <origin
+      xyz="-0.036618 0.0046 1.5581E-05"
+      rpy="0 0.0004332 0" />
+    <parent
+      link="PIPMCP_2rd_ring" />
+    <child
+      link="DIP_ring" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="12.86307659" />
+  </joint>
+  <link
+    name="tipmount_ring">
+    <inertial>
+      <origin
+        xyz="-0.005351729511095 0.000894346509790563 1.7086589808514E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.00137452817416282" />
+      <inertia
+        ixx="4.05615773264179E-08"
+        ixy="1.59325139312679E-09"
+        ixz="-8.52976180898049E-11"
+        iyy="4.97881352950525E-08"
+        iyz="-8.71857160822335E-12"
+        izz="3.51132029919713E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_ring.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_ring.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F4J4"
+    type="revolute">
+    <origin
+      xyz="-0.029 0 0"
+      rpy="0.00026859 0 0" />
+    <parent
+      link="DIP_ring" />
+    <child
+      link="tipmount_ring" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="13.57866158" />
+  </joint>
+  <link
+    name="fingertip_ring">
+    <inertial>
+      <origin
+        xyz="0.00986639024726599 0.000252316961107007 1.72931873365992E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00199520894508364" />
+      <inertia
+        ixx="4.72377154106638E-08"
+        ixy="2.39155799699115E-09"
+        ixz="1.72803398130845E-11"
+        iyy="5.3927900693216E-08"
+        iyz="7.83709775287707E-13"
+        izz="5.31224375663837E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_ring.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_ring.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="fingertip_ring_fixed"
+    type="fixed">
+    <origin
+      xyz="-0.0267 0.0010404 0"
+      rpy="0 0 0" />
+    <parent
+      link="tipmount_ring" />
+    <child
+      link="fingertip_ring" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="MCP_joint_pinky">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0" />
+      <inertia
+        ixx="0"
+        ixy="0"
+        ixz="0"
+        iyy="0"
+        iyz="0"
+        izz="0" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_pinky.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/MCP_joint_pinky.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F5J1"
+    type="revolute">
+    <origin
+      xyz="-0.0742813381427243 0.00226865106058523 -0.0340011106648663"
+      rpy="-0.160365374712629 -0.204586980120563 -0.0608219010949235" />
+    <parent
+      link="base_link" />
+    <child
+      link="MCP_joint_pinky" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.32695"
+      upper="1.63595"
+      effort="1.0"
+      velocity="8.203047484" />
+  </joint>
+  <link
+    name="PIPMCP_2rd_pinky">
+    <inertial>
+      <origin
+        xyz="-0.0174056341673092 0.00607488611667895 7.02946114356992E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00657987169240391" />
+      <inertia
+        ixx="1.74652025935675E-07"
+        ixy="-3.1569308910913E-08"
+        ixz="2.88433493885074E-10"
+        iyy="9.4505778817037E-07"
+        iyz="1.66296742783843E-11"
+        izz="9.50285978684713E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_pinky.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/PIPMCP_2rd_pinky.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F5J2"
+    type="revolute">
+    <origin
+      xyz="-0.0040000052819367 -0.00220000069793736 0"
+      rpy="0 0 0" />
+    <parent
+      link="MCP_joint_pinky" />
+    <child
+      link="PIPMCP_2rd_pinky" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.495"
+      upper="0.495"
+      effort="0.2"
+      velocity="8.115781022" />
+  </joint>
+  <link
+    name="DIP_pinky">
+    <inertial>
+      <origin
+        xyz="-0.0155093893464535 0.00112278799226154 4.74866655756495E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00450885769445445" />
+      <inertia
+        ixx="1.22978219289757E-07"
+        ixy="9.51793774050059E-09"
+        ixz="-3.42438036566865E-10"
+        iyy="3.97109552000592E-07"
+        iyz="6.27165212807384E-12"
+        izz="3.87914797407966E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_pinky.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/DIP_pinky.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F5J3"
+    type="revolute">
+    <origin
+      xyz="-0.0366176824738007 0.00460000000550368 1.55808781511432E-05"
+      rpy="0 0.00043320128520894 0" />
+    <parent
+      link="PIPMCP_2rd_pinky" />
+    <child
+      link="DIP_pinky" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="12.86307659" />
+  </joint>
+  <link
+    name="tipmount_pinky">
+    <inertial>
+      <origin
+        xyz="-0.00535172413896925 0.000894357087703209 1.70918996228002E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.00137453094684671" />
+      <inertia
+        ixx="4.05616278583377E-08"
+        ixy="1.59322067531226E-09"
+        ixz="-8.53268008082692E-11"
+        iyy="4.97883297247661E-08"
+        iyz="-8.7378366094725E-12"
+        izz="3.51131528512837E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_pinky.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/tipmount_pinky.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="F5J4"
+    type="revolute">
+    <origin
+      xyz="-0.0290000000150085 0 0"
+      rpy="0.000268594994171455 0 0" />
+    <parent
+      link="DIP_pinky" />
+    <child
+      link="tipmount_pinky" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4932"
+      upper="1.6272"
+      effort="0.3"
+      velocity="13.57866158" />
+  </joint>
+  <link
+    name="fingertip_pinky">
+    <inertial>
+      <origin
+        xyz="0.00986639457822258 0.000242721364652409 -4.80509298105697E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.00199521066470033" />
+      <inertia
+        ixx="4.72378810799744E-08"
+        ixy="2.39179163159098E-09"
+        ixz="1.71964753948245E-11"
+        iyy="5.39277659112841E-08"
+        iyz="4.98851207811953E-13"
+        izz="5.3122897528373E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_pinky.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.96078431372549 0.96078431372549 0.964705882352941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="meshes/fingertip_pinky.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="fingertip_pinky_fixed"
+    type="fixed">
+    <origin
+      xyz="-0.0267000010157146 0.00104999545263939 0"
+      rpy="0 0 0" />
+    <parent
+      link="tipmount_pinky" />
+    <child
+      link="fingertip_pinky" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>

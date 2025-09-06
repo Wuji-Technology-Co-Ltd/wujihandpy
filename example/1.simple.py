@@ -5,7 +5,7 @@ import math
 
 
 def main():
-    hand = wujihandpy.Hand()
+    hand = wujihandpy.Hand(usb_pid=0x2000)
     try:
         run(hand)
     finally:
@@ -31,10 +31,10 @@ def run(hand: wujihandpy.Hand):
     # Wait for joints to move into place
     time.sleep(0.5)
 
-    # Disable non-index fingers
-    for i in range(0, 5):
-        if i != 1:
-            hand.finger(i).write_joint_control_word(np.uint16(5))
+    # # Disable non-index fingers
+    # for i in range(0, 5):
+    #     if i != 1:
+    #         hand.finger(i).write_joint_control_word_unchecked(np.uint16(5))
 
     # 2Hz SDO Control
     update_rate = 2.0
@@ -46,9 +46,9 @@ def run(hand: wujihandpy.Hand):
 
         # Control index finger
         # Unchecked API is non-blocking (returns immediately, but success is not guaranteed)
-        hand.finger(1).joint(0).write_joint_control_position_unchecked(np.float64(y))
-        hand.finger(1).joint(2).write_joint_control_position_unchecked(np.float64(y))
-        hand.finger(1).joint(3).write_joint_control_position_unchecked(np.float64(y))
+        hand.finger(2).joint(0).write_joint_control_position_unchecked(np.float64(y))
+        hand.finger(2).joint(2).write_joint_control_position_unchecked(np.float64(y))
+        hand.finger(2).joint(3).write_joint_control_position_unchecked(np.float64(y))
 
         x += math.pi / update_rate
         time.sleep(update_period)

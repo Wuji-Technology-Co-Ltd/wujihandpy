@@ -5,7 +5,7 @@ import math
 
 
 def main():
-    hand = wujihandpy.Hand()
+    hand = wujihandpy.Hand(usb_pid=0x2000)
     try:
         run(hand)
     finally:

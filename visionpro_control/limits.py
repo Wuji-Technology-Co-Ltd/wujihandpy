@@ -5,7 +5,7 @@ import math
 
 
 def main():
-    hand = wujihandpy.Hand(usb_pid=0x2000)
+    hand = wujihandpy.Hand()
     try:
         run(hand)
     finally:
@@ -20,11 +20,12 @@ def run(hand: wujihandpy.Hand):
 
     # Read joint limits and current positions
     joint_upper_limits = hand.read_joint_upper_limit()
-    print('joint_upper_limits', joint_upper_limits)
     joint_lower_limits = hand.read_joint_lower_limit()
-    print('joint_lower_limits', joint_lower_limits)
-
     current_positions = hand.read_joint_position()
+
+    print('joint_upper_limits', joint_upper_limits)
+    print('joint_lower_limits', joint_lower_limits)
+    print('current_positions', current_positions)
 
     # Calculate normalized initial positions (0-1 range)
     normalized_positions = (current_positions - joint_lower_limits) / (

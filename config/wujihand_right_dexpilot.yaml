@@ -1,0 +1,11 @@
+retargeting:
+  type: DexPilot
+  urdf_path: /home/uji/Robben_ws/wujihandpy/visionpro_control/urdf/wujihand_right.urdf
+
+  # Target refers to the retargeting target, which is the robot hand
+  wrist_link_name: "base_link"
+  finger_tip_link_names: [ "fingertip_thumb", "fingertip_index", "fingertip_middle", "fingertip_ring", "fingertip_pinky" ]
+  scaling_factor: 1.0
+
+  # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
+  low_pass_alpha: 0.2
