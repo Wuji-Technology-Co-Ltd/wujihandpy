@@ -13,7 +13,8 @@ PYBIND11_MODULE(_core, m) {
     using Hand = Wrapper<wujihandcpp::device::Hand>;
     auto hand = py::class_<Hand>(m, "Hand");
     hand.def(
-        py::init<uint16_t, int32_t>(), py::arg("usb_vid") = 0x0483, py::arg("usb_pid") = 0x7530);
+        py::init<const char*, int32_t, uint16_t>(), py::arg("serial_number") = nullptr,
+        py::arg("usb_pid") = -1, py::arg("usb_vid") = 0x0483);
 
     Hand::register_py_interface<data::hand::FirmwareVersion>(hand, "firmware_version");
     Hand::register_py_interface<data::hand::FirmwareDate>(hand, "firmware_date");
