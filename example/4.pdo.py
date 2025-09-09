@@ -5,7 +5,7 @@ import math
 
 
 def main():
-    hand = wujihandpy.Hand(usb_pid=-1)
+    hand = wujihandpy.Hand()
     try:
         run(hand)
     finally:
@@ -52,18 +52,18 @@ def run(hand: wujihandpy.Hand):
         np.array(
             [
                 # J1J2 J3J4
-                [1, 1, 1, 1],  # F1
-                [1, 1, 1, 1],  # F2
-                [1, 1, 1, 1],  # F3
-                [1, 1, 1, 1],  # F4
-                [1, 1, 1, 1],  # F5
+                [5, 5, 5, 5],  # F1
+                [1, 5, 1, 1],  # F2
+                [1, 5, 1, 1],  # F3
+                [1, 5, 1, 1],  # F4
+                [1, 5, 1, 1],  # F5
             ],
             dtype=np.uint16,
         )
     )
 
     # 1kHz PDO Control
-    update_rate = 100.0
+    update_rate = 1000.0
     update_period = 1.0 / update_rate
 
     x = 0
@@ -75,19 +75,21 @@ def run(hand: wujihandpy.Hand):
         # - Sent immediately
         # - Not delivery-guaranteed
         # Therefore, continuous sending is required
-        hand.pdo_write_unchecked(
-            np.array(
-                [
-                    [0.975, 0.523, 0.271, -0.45],
-                    [0.382, 0.241, -0.003, -0.275],
-                    [-0.299, 0.329, 0.067, -0.286],
-                    [-0.122, 0.228, 0.315, -0.178],
-                    [0.205, 0.087, 0.288, -0.149],
-                ]
-            )
-        )
+        hand.pdo_write_unchecked(np.float64(y))
         # Equals to:
-        # hand.pdo_write_unchecked(np.float64(y))
+        # hand.pdo_write_unchecked(
+        #     np.array(
+        #         [
+        #             # J1J2 J3J4
+        #             [y, y, y, y],  # F1
+        #             [y, y, y, y],  # F2
+        #             [y, y, y, y],  # F3
+        #             [y, y, y, y],  # F4
+        #             [y, y, y, y],  # F5
+        #         ],
+        #         dtype=np.float64,
+        #     )
+        # )
 
         x += math.pi / update_rate
         time.sleep(update_period)
