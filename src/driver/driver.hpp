@@ -47,7 +47,7 @@ public:
             if (ret == LIBUSB_ERROR_NO_DEVICE)
                 LOG_ERROR("Failed to submit transmit transfer: Device disconnected.");
             else
-                LOG_ERROR("Failed to submit transmit transfer: %d.", ret);
+                LOG_ERROR("Failed to submit transmit transfer: %d (%s).", ret, libusb_errname(ret));
         }
 
         return actual_length;
@@ -71,7 +71,7 @@ private:
 
         ret = libusb_init(&libusb_context_);
         if (ret != 0) [[unlikely]] {
-            LOG_ERROR("Failed to init libusb: %d", ret);
+            LOG_ERROR("Failed to init libusb: %d (%s)", ret, libusb_errname(ret));
             return false;
         }
         utility::FinalAction exit_libusb{[this]() { libusb_exit(libusb_context_); }};
@@ -84,14 +84,15 @@ private:
         if constexpr (utility::is_linux()) {
             ret = libusb_set_auto_detach_kernel_driver(libusb_device_handle_, true);
             if (ret != 0) [[unlikely]] {
-                LOG_ERROR("Failed to set auto detach kernel driver: %d", ret);
+                LOG_ERROR(
+                    "Failed to set auto detach kernel driver: %d (%s)", ret, libusb_errname(ret));
                 return false;
             }
         }
 
         ret = libusb_claim_interface(libusb_device_handle_, target_interface_);
         if (ret != 0) [[unlikely]] {
-            LOG_ERROR("Failed to claim interface: %d", ret);
+            LOG_ERROR("Failed to claim interface: %d (%s)", ret, libusb_errname(ret));
             return false;
         }
         utility::FinalAction release_interface{
@@ -112,7 +113,7 @@ private:
             this, 0);
         ret = libusb_submit_transfer(libusb_receive_transfer_);
         if (ret != 0) [[unlikely]] {
-            LOG_ERROR("Failed to submit receive transfer: %d", ret);
+            LOG_ERROR("Failed to submit receive transfer: %d (%s)", ret, libusb_errname(ret));
             return false;
         }
 
@@ -127,7 +128,9 @@ private:
         libusb_device** device_list = nullptr;
         const ssize_t device_count_raw = libusb_get_device_list(libusb_context_, &device_list);
         if (device_count_raw < 0) {
-            LOG_ERROR("Failed to get device list: %zd", device_count_raw);
+            LOG_ERROR(
+                "Failed to get device list: %zd (%s)", device_count_raw,
+                libusb_errname(static_cast<int>(device_count_raw)));
             return nullptr;
         }
 
@@ -146,7 +149,7 @@ private:
             int ret = libusb_get_device_descriptor(device_list[i], &device_descriptors[i]);
             if (ret != 0) {
                 device_descriptors[i].bLength = 0;
-                LOG_WARN("A device descriptor failed to get: %d", ret);
+                LOG_WARN("A device descriptor failed to get: %d (%s)", ret, libusb_errname(ret));
                 continue;
             }
 
@@ -200,8 +203,8 @@ private:
             if (ret != 0) [[unlikely]] {
                 LOG_ERROR(
                     "Device with vendor id: 0x%x and product id: 0x%x was successfully detected "
-                    "but could not be opened: %d",
-                    vendor_id, product_id, ret);
+                    "but could not be opened: %d (%s)",
+                    vendor_id, product_id, ret, libusb_errname(ret));
                 return nullptr;
             }
         }
@@ -224,8 +227,29 @@ private:
                     "Failed to re-submit receive transfer: Device disconnected. "
                     "Terminating...");
             else
-                LOG_ERROR("Failed to re-submit receive transfer: %d. Terminating...", ret);
+                LOG_ERROR(
+                    "Failed to re-submit receive transfer: %d (%s). Terminating...", ret,
+                    libusb_errname(ret));
             std::terminate();
+        }
+    }
+
+    static constexpr const char* libusb_errname(int number) {
+        switch (number) {
+        case LIBUSB_ERROR_IO: return "ERROR_IO";
+        case LIBUSB_ERROR_INVALID_PARAM: return "ERROR_INVALID_PARAM";
+        case LIBUSB_ERROR_ACCESS: return "ERROR_ACCESS";
+        case LIBUSB_ERROR_NO_DEVICE: return "ERROR_NO_DEVICE";
+        case LIBUSB_ERROR_NOT_FOUND: return "ERROR_NOT_FOUND";
+        case LIBUSB_ERROR_BUSY: return "ERROR_BUSY";
+        case LIBUSB_ERROR_TIMEOUT: return "ERROR_TIMEOUT";
+        case LIBUSB_ERROR_OVERFLOW: return "ERROR_OVERFLOW";
+        case LIBUSB_ERROR_PIPE: return "ERROR_PIPE";
+        case LIBUSB_ERROR_INTERRUPTED: return "ERROR_INTERRUPTED";
+        case LIBUSB_ERROR_NO_MEM: return "ERROR_NO_MEM";
+        case LIBUSB_ERROR_NOT_SUPPORTED: return "ERROR_NOT_SUPPORTED";
+        case LIBUSB_ERROR_OTHER: return "ERROR_OTHER";
+        default: return "UNKNOWN";
         }
     }
 
