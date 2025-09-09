@@ -78,7 +78,7 @@ public:
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
-            if (array.ndim() != 1 || array.shape()[1] != 4)
+            if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (ssize_t j = 0; j < 4; j++)
@@ -128,7 +128,7 @@ public:
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
-            if (array.ndim() != 1 || array.shape()[1] != 4)
+            if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (ssize_t j = 0; j < 4; j++)
@@ -157,7 +157,7 @@ public:
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
-            if (array.ndim() != 1 || array.shape()[1] != 4)
+            if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (ssize_t j = 0; j < 4; j++)
