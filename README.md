@@ -102,6 +102,8 @@ time = hand.read_system_time()
 position = hand.finger(1).joint(0).read_joint_position()
 ```
 
+关节角度为 `np.float64` 类型，单位为弧度，零点和正方向与 [URDF文件](https://github.com/Wuji-Technology-Co-Ltd/wujihand-urdf) 中定义的相同。
+
 用一条指令读取多个数据也是可行的，这被称为**批量读 (Bulk-Read)**。
 
 例如，以下指令读取整手所有（20个）关节的当前位置数据：
@@ -110,23 +112,22 @@ position = hand.finger(1).joint(0).read_joint_position()
 positions = hand.read_joint_position()
 ```
 
-进行批量读时，函数返回包含所有数据的 `np.array`：
+进行批量读时，函数返回包含所有数据的 `np.ndarray[np.float64]`：
 
 ```python
->>> np.set_printoptions(formatter={'int': lambda x: hex(x)})
 >>> print(positions)
-[[0x200828 0x2062D3 0x20186B 0x200535]
- [0xDFFE7A 0xBF2318 0x7FC3C2 0x802342]
- [0xE01213 0x900C79 0x3FB49B 0x60191E]
- [0xE04051 0x601EFB 0x4035B6 0x60026B]
- [0xDFD9AC 0x3FA315 0x4015C2 0x5FDF6A]]
+[[ 0.975  0.523  0.271 -0.45 ]
+ [ 0.382  0.241 -0.003 -0.275]
+ [-0.299  0.329  0.067 -0.286]
+ [-0.122  0.228  0.315 -0.178]
+ [ 0.205  0.087  0.288 -0.149]]
 ```
 
 `read` 函数会阻塞，直到读取完成。保证当函数返回时，读取一定成功。
 
 ### 写数据
 
-写数据拥有类似的API，但多了一个参数用于传递目标值：
+写数据拥有类似的 API，但多了一个参数用于传递目标值：
 
 ```python
 def write_<dataname>(self, np.<datatype>)
@@ -136,15 +137,22 @@ def write_<dataname>(self, np.array<datatype>) # For bulk-write
 例如，写入单个关节的目标位置数据：
 
 ```python
-hand.finger(1).joint(0).write_joint_control_position(np.int32(0x800000))
+hand.finger(1).joint(0).write_joint_control_position(np.float64(0.8))
 ```
 
-关节位置的合法范围为 `[0x000000, 0xFFFFFF]`。
-
-**批量写**数据也是可行的，例如，批量写入第1个手指的目标位置数据：
+各关节的合法角度范围可通过以下 API 获取：
 
 ```python
-hand.finger(1).write_joint_control_position(np.int32(0x800000))
+upper = (Hand | Finger | Joint).read_joint_upper_limit()
+lower = (Hand | Finger | Joint).read_joint_lower_limit()
+```
+
+若写入的角度超出合法范围，会被自动限幅至最高/最低值。
+
+**批量写**数据也是可行的，例如，批量为第一个手指写入目标位置数据：
+
+```python
+hand.finger(1).write_joint_control_position(np.float64(0.8))
 ```
 
 如果每个关节的目标值不同，可以传入一个包含所有目标值的 `np.array`：
@@ -152,9 +160,9 @@ hand.finger(1).write_joint_control_position(np.int32(0x800000))
 ```python
 hand.finger(1).write_joint_control_position(
     np.array(
-        #   J1        J2        J3        J4
-        [0xDFFFFF, 0xBFFFFF, 0x400000, 0x600000],
-        dtype=np.int32,
+        #   J1    J2    J3    J4
+        [0.8,  0.0,  0.8,  0.8],
+        dtype=np.float64,
     )
 )
 ```
@@ -172,15 +180,15 @@ async def write_<dataname>_async(self, np.<datatype>)
 async def write_<dataname>_async(self, np.array<datatype>)  # For bulk-write
 ```
 
-异步读/写函数同样会异步阻塞，直到读/写完成。保证当函数返回时，读/写一定成功。
+异步接口需 `await`；等待期间不阻塞线程/事件循环，返回时保证读/写已经成功。
 
 ### Unchecked 读/写
 
 如果不关心读/写是否成功，可以使用 Unchecked 版本的读/写函数，函数名以 `_unchecked` 作为后缀。
 
 ```python
-def read_<dataname>_unchecked(self) -> np.<datatype>
-def read_<dataname>_unchecked(self) -> np.array<datatype> # For bulk-read
+def read_<dataname>_unchecked(self) -> None
+def read_<dataname>_unchecked(self) -> None               # For bulk-read
 def write_<dataname>_unchecked(self, np.<datatype>)
 def write_<dataname>_unchecked(self, np.array<datatype>)  # For bulk-write
 ```
@@ -199,6 +207,20 @@ def get_<dataname>(self) -> np.array<datatype> # For bulk-read
 `get` 系列函数同样不会阻塞，它总是立即返回最近一次读取到的数据，无论该数据来自 `read`、`async-read` 还是 `read-unchecked`。 
 
 如果尚未请求过该数据，或请求尚未成功，`get` 函数的返回值是未定义的（通常为0）。
+
+### PDO 写
+
+默认的读/写方式均带有缓冲池，积攒一段数据后才进行传输，最高读/写频率无法超过 100Hz。
+
+对于需要高频率实时控制关节位置（如 1kHz）的场景，需使用 PDO 非阻塞写接口。
+
+```python
+hand.pdo_write_unchecked(np.float64(0.8))
+# 或按 5x4 结构批量发送：
+# hand.pdo_write_unchecked(np.array([...], dtype=np.float64))
+```
+
+PDO 启用前需特别配置，见 [example/4.pdo.py](example/4.pdo.py)。
 
 ## 性能与优化
 
