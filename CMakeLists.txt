@@ -50,7 +50,7 @@ if(MSVC)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
         message(STATUS "Static linking C++ standard library (MSVC)")
     else()
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
         message(STATUS "Dynamic linking C++ standard library (MSVC)")
     endif()
 endif()
@@ -61,10 +61,23 @@ file(GLOB_RECURSE PROJECT_SOURCE CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.c
 )
 
-add_library(
-    ${PROJECT_NAME} SHARED
-    ${PROJECT_SOURCE}
-)
+option(BUILD_STATIC_WUJIHANDCPP "Build static library wujihandcpp" OFF)
+if(BUILD_STATIC_WUJIHANDCPP)
+    add_library(
+        ${PROJECT_NAME} STATIC
+        ${PROJECT_SOURCE}
+    )
+    target_compile_definitions(${PROJECT_NAME} PUBLIC STATIC_LINKING_WUJIHANDCPP)
+    message(STATUS "Building static library wujihandcpp")
+else()
+    add_library(
+        ${PROJECT_NAME} SHARED
+        ${PROJECT_SOURCE}
+    )
+    message(STATUS "Building shared library wujihandcpp")
+endif()
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE BUILDING_WUJIHANDCPP)
 
 include_directories(SYSTEM ${LIBUSB_INCLUDE_DIRS})
 
@@ -73,12 +86,10 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 
 if(WIN32)
     find_package(PkgConfig REQUIRED)
-    set(VCPKG_LIBRARY_LINKAGE static)
-    set(VCPKG_BUILD_TYPE release)
     pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
     target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${LIBUSB_INCLUDE_DIRS})
-    target_link_directories(${PROJECT_NAME} PRIVATE "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBUSB_LIBRARIES})
+    target_link_directories(${PROJECT_NAME} PUBLIC "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${LIBUSB_LIBRARIES})
 elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
 endif()
