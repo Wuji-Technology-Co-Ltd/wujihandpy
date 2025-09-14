@@ -13,9 +13,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm]
 
-    env:
-      VCPKG_ROOT: "${{ env.RUNNER_TEMP }}/vcpkg"
-
     steps:
       - uses: actions/checkout@v5
 
@@ -23,7 +20,7 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgDirectory: "${{ env.VCPKG_ROOT }}"
+          vcpkgDirectory: "${{ runner.temp }}/vcpkg"
           vcpkgGitCommitId: master
 
       - uses: actions/setup-python@v5
@@ -33,6 +30,8 @@ jobs:
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          VCPKG_ROOT: "${{ runner.temp }}/vcpkg"
 
       - uses: actions/upload-artifact@v4
         with:
