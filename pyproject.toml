@@ -24,3 +24,11 @@ sdist.include = ["src/wujihandpy/_version.py"]
 
 [tool.setuptools_scm]
 write_to = "src/wujihandpy/_version.py"
+
+[tool.cibuildwheel]
+archs = ["auto64"]
+
+[tool.cibuildwheel.windows]
+repair-wheel-command = '''
+delvewheel repair --add-path "%VCPKG_ROOT%\\installed\\x64-windows\\bin" -w {dest_dir} {wheel}
+'''

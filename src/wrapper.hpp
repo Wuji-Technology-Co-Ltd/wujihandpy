@@ -81,7 +81,7 @@ public:
             if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
-            for (ssize_t j = 0; j < 4; j++)
+            for (int j = 0; j < 4; j++)
                 T::joint(j).template write_async<Data>(latch, r(j));
         } else if constexpr (
             std::is_same_v<T, wujihandcpp::device::Hand>
@@ -89,8 +89,8 @@ public:
             if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
                 throw std::runtime_error("Array shape must be {5, 4}!");
             auto r = array.template unchecked<2>();
-            for (ssize_t i = 0; i < 5; i++)
-                for (ssize_t j = 0; j < 4; j++)
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
                     T::finger(i).joint(j).template write_async<Data>(latch, r(i, j));
         }
 
@@ -131,7 +131,7 @@ public:
             if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
-            for (ssize_t j = 0; j < 4; j++)
+            for (int j = 0; j < 4; j++)
                 T::joint(j).template write_async<Data>(callback, r(j));
         } else if constexpr (
             std::is_same_v<T, wujihandcpp::device::Hand>
@@ -139,8 +139,8 @@ public:
             if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
                 throw std::runtime_error("Array shape must be {5, 4}!");
             auto r = array.template unchecked<2>();
-            for (ssize_t i = 0; i < 5; i++)
-                for (ssize_t j = 0; j < 4; j++)
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
                     T::finger(i).joint(j).template write_async<Data>(callback, r(i, j));
         }
 
@@ -160,7 +160,7 @@ public:
             if (array.ndim() != 1 || array.shape()[0] != 4)
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
-            for (ssize_t j = 0; j < 4; j++)
+            for (int j = 0; j < 4; j++)
                 T::joint(j).template write_async_unchecked<Data>(r(j));
         } else if constexpr (
             std::is_same_v<T, wujihandcpp::device::Hand>
@@ -168,8 +168,8 @@ public:
             if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
                 throw std::runtime_error("Array shape must be {5, 4}!");
             auto r = array.template unchecked<2>();
-            for (ssize_t i = 0; i < 5; i++)
-                for (ssize_t j = 0; j < 4; j++)
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
                     T::finger(i).joint(j).template write_async_unchecked<Data>(r(i, j));
         }
     }

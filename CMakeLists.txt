@@ -1,7 +1,22 @@
 cmake_minimum_required(VERSION 3.15)
 
+if(WIN32)
+    if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+        if(DEFINED ENV{VCPKG_ROOT})
+            set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE FILEPATH "" FORCE)
+        endif()
+    endif()
+    if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+        set(VCPKG_TARGET_TRIPLET "x64-windows" CACHE STRING "" FORCE)
+    endif()
+endif()
+
 project(wujihandpy)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(BUILD_STATIC_WUJIHANDCPP ON CACHE BOOL "" FORCE)
+add_subdirectory(wujihandcpp EXCLUDE_FROM_ALL)
+
 
 # Set C++ standard to C++20
 set(CMAKE_CXX_STANDARD 20)
@@ -22,9 +37,9 @@ endif()
 
 # Add compiler options based on compiler
 if(MSVC)
-    add_compile_options(/W4 /Zc:preprocessor)
+    add_compile_options(/W4 /Zc:preprocessor /EHsc)
     add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 else()
     # GCC/Clang
     add_compile_options(-Wall -Wextra -Wpedantic)
@@ -36,14 +51,18 @@ file(GLOB_RECURSE PROJECT_SOURCE CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.c
 )
 
-include_directories(${PROJECT_SOURCE_DIR}/src)
 
 set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(_core ${PROJECT_SOURCE})
 
-target_link_libraries(_core PRIVATE pybind11::headers)
+target_include_directories(_core PRIVATE ${PROJECT_SOURCE_DIR}/wujihandcpp/include)
+target_include_directories(_core PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+target_link_libraries(_core PRIVATE pybind11::module)
+
+target_link_directories(_core PRIVATE ${CMAKE_BINARY_DIR}/wujihandcpp)
 target_link_libraries(_core PRIVATE wujihandcpp)
 
 # The install directory is the output (wheel) directory
