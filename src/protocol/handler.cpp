@@ -15,6 +15,7 @@
 #include <type_traits>
 
 #include <wujihandcpp/protocol/handler.hpp>
+#include <wujihandcpp/utility/api.hpp>
 
 #include "driver/async_transmit_buffer.hpp"
 #include "driver/driver.hpp"
@@ -518,51 +519,51 @@ private:
     std::jthread tick_thread_;
 };
 
-API Handler::Handler(
+WUJIHANDCPP_API Handler::Handler(
     uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
     size_t storage_unit_count) {
     impl_ = new Impl{usb_vid, usb_pid, serial_number, buffer_transfer_count, storage_unit_count};
 }
 
-API Handler::~Handler() { delete impl_; }
+WUJIHANDCPP_API Handler::~Handler() { delete impl_; }
 
-API void Handler::init_storage_info(int storage_id, StorageInfo info) {
+WUJIHANDCPP_API void Handler::init_storage_info(int storage_id, StorageInfo info) {
     reinterpret_cast<Impl*>(impl_)->init_storage_info(storage_id, info);
 }
 
-API void Handler::read_async_unchecked(int storage_id) {
+WUJIHANDCPP_API void Handler::read_async_unchecked(int storage_id) {
     reinterpret_cast<Impl*>(impl_)->read_async_unchecked(storage_id);
 }
 
-API void Handler::read_async(
+WUJIHANDCPP_API void Handler::read_async(
     int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
     reinterpret_cast<Impl*>(impl_)->read_async(storage_id, callback, callback_context);
 }
 
-API void Handler::write_async_unchecked(Buffer8 data, int storage_id) {
+WUJIHANDCPP_API void Handler::write_async_unchecked(Buffer8 data, int storage_id) {
     reinterpret_cast<Impl*>(impl_)->write_async_unchecked(data, storage_id);
 }
 
-API void Handler::write_async(
+WUJIHANDCPP_API void Handler::write_async(
     Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
     Buffer8 callback_context) {
     reinterpret_cast<Impl*>(impl_)->write_async(data, storage_id, callback, callback_context);
 }
 
-API void Handler::pdo_write_async_unchecked(
+WUJIHANDCPP_API void Handler::pdo_write_async_unchecked(
     const double (&control_positions)[5][4], uint32_t timestamp) {
     reinterpret_cast<Impl*>(impl_)->pdo_write_async_unchecked(control_positions, timestamp);
 }
 
-API bool Handler::trigger_transmission() {
+WUJIHANDCPP_API bool Handler::trigger_transmission() {
     return reinterpret_cast<Impl*>(impl_)->trigger_transmission();
 }
 
-API Handler::Buffer8 Handler::get(int storage_id) {
+WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) {
     return reinterpret_cast<Impl*>(impl_)->get(storage_id);
 }
 
-API void Handler::disable_thread_safe_check() {
+WUJIHANDCPP_API void Handler::disable_thread_safe_check() {
     return reinterpret_cast<Impl*>(impl_)->disable_thread_safe_check();
 }
 

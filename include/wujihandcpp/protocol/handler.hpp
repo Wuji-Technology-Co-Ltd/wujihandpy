@@ -6,7 +6,7 @@
 
 #include <type_traits>
 
-#include "utility/cross_os.hpp"
+#include "wujihandcpp/utility/api.hpp"
 
 namespace wujihandcpp {
 namespace protocol {
@@ -68,32 +68,33 @@ public:
         static_assert(sizeof(void*) == 8, "");
     };
 
-    API explicit Handler(
+    WUJIHANDCPP_API explicit Handler(
         uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
         size_t storage_unit_count);
 
-    API ~Handler();
+    WUJIHANDCPP_API ~Handler();
 
-    API void init_storage_info(int storage_id, StorageInfo info);
+    WUJIHANDCPP_API void init_storage_info(int storage_id, StorageInfo info);
 
-    API void read_async_unchecked(int storage_id);
+    WUJIHANDCPP_API void read_async_unchecked(int storage_id);
 
-    API void read_async(
+    WUJIHANDCPP_API void read_async(
         int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context);
 
-    API void write_async_unchecked(Buffer8 data, int storage_id);
+    WUJIHANDCPP_API void write_async_unchecked(Buffer8 data, int storage_id);
 
-    API void write_async(
+    WUJIHANDCPP_API void write_async(
         Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
         Buffer8 callback_context);
 
-    API void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp);
+    WUJIHANDCPP_API void
+        pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp);
 
-    API bool trigger_transmission();
+    WUJIHANDCPP_API bool trigger_transmission();
 
-    API Buffer8 get(int storage_id);
+    WUJIHANDCPP_API Buffer8 get(int storage_id);
 
-    API void disable_thread_safe_check();
+    WUJIHANDCPP_API void disable_thread_safe_check();
 
 private:
     class Impl;

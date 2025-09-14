@@ -8,12 +8,6 @@ namespace wujihandcpp::utility {
 # define PACKED_STRUCT(...) struct __attribute__((packed)) __VA_ARGS__
 #endif
 
-#ifdef _WIN32
-# define API __declspec(dllexport)
-#else
-# define API __attribute__((visibility("default")))
-#endif
-
 constexpr static inline bool is_linux() {
 #ifdef __linux__
     return true;
