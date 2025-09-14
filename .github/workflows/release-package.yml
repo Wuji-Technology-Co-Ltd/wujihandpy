@@ -7,45 +7,45 @@ on:
 
 jobs:
   build:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm]
+
+    env:
+      VCPKG_ROOT: "${{ runner.temp }}/vcpkg"
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+
+      - name: Setup vcpkg
+        if: startsWith(matrix.os, 'windows')
+        uses: lukka/run-vcpkg@v11
         with:
-          submodules: recursive
+          vcpkgDirectory: "${{ env.VCPKG_ROOT }}"
+          vcpkgGitCommitId: master
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: actions/setup-python@v5
 
-      - name: Build release package (${{ matrix.arch }})
-        uses: docker/build-push-action@v6
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          VCPKG_ROOT: "${{ runner.temp }}/vcpkg"
+
+      - uses: actions/upload-artifact@v4
         with:
-          context: .
-          file: Dockerfile.package-builder
-          outputs: type=local,dest=package-build/
-          cache-from: type=gha,scope=release-build-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=release-build-${{ matrix.arch }}
+          name: dist-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
 
-      - name: List built packages
-        run: ls package-build
-
-      - name: Upload built packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ matrix.arch }}
-          path: package-build/*.whl
-
-  publish-to-pypi:
+  publish:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
     environment:
       name: pypi
       url: https://pypi.org/p/wujihandpy

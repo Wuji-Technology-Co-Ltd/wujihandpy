@@ -28,7 +28,11 @@ write_to = "src/wujihandpy/_version.py"
 [tool.cibuildwheel]
 archs = ["auto64"]
 
+[tool.cibuildwheel.linux]
+before-build = "dnf install -y libusbx libusbx-devel zip"
+
 [tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
 repair-wheel-command = '''
 delvewheel repair --add-path "%VCPKG_ROOT%\\installed\\x64-windows\\bin" -w {dest_dir} {wheel}
 '''
