@@ -91,6 +91,7 @@ if(WIN32)
     target_link_directories(${PROJECT_NAME} PUBLIC "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
     target_link_libraries(${PROJECT_NAME} PUBLIC ${LIBUSB_LIBRARIES})
 elseif(UNIX)
+    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE /usr/include/libusb-1.0)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
 endif()
 
