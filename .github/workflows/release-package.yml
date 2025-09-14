@@ -40,7 +40,8 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          VCPKG_ROOT: ${{ env.VCPKG_INSTALLATION_ROOT }}
+          CIBW_ENVIRONMENT_WINDOWS: >-
+            VCPKG_ROOT="${{ env.VCPKG_INSTALLATION_ROOT }}"
 
       - uses: actions/upload-artifact@v4
         with:
