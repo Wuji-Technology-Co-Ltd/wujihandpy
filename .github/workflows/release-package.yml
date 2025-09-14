@@ -17,7 +17,10 @@ jobs:
     steps:
       - name: Check vcpkg env var in gha
         run: |
-          echo $env:VCPKG_INSTALLATION_ROOT
+          echo $CIBW_ENVIRONMENT_WINDOWS
+        env:
+          CIBW_ENVIRONMENT_WINDOWS: >-
+            VCPKG_ROOT="${{ env.VCPKG_INSTALLATION_ROOT }}"
 
       - name: Checkout code
         uses: actions/checkout@v5
