@@ -32,40 +32,27 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_EXTENSIONS OFF)
 
-# Set default build type to Release
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add compiler options based on compiler
 if(MSVC)
     add_compile_options(/W4 /Zc:preprocessor)
     add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
     # GCC/Clang
     add_compile_options(-Wall -Wextra -Wpedantic -fvisibility=hidden)
 endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Set libusb binaries directory (if provided)
-set(LIBUSB_BINARY_PATH "" CACHE STRING "Path to libusb binaries directory")
-if(NOT LIBUSB_BINARY_PATH STREQUAL "")
-    message(STATUS "Using libusb binary from: ${LIBUSB_BINARY_PATH}")
-    link_directories(${LIBUSB_BINARY_PATH})
-endif()
-
-# Set libusb header files directory (if provided)
-if(UNIX)
-    set(LIBUSB_HEADER_PATH "/usr/include/libusb-1.0" CACHE STRING "Path to libusb header files directory")
-else()
-    set(LIBUSB_HEADER_PATH "" CACHE STRING "Path to libusb header files directory")
-endif()
-if(NOT LIBUSB_HEADER_PATH STREQUAL "")
-    message(STATUS "Using libusb header from: ${LIBUSB_HEADER_PATH}")
-    include_directories(SYSTEM ${LIBUSB_HEADER_PATH})
+option(STATIC_LINK_STDCPP "Statically link the C++ standard library" OFF)
+if(MSVC)
+    if(STATIC_LINK_STDCPP)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        message(STATUS "Static linking C++ standard library (MSVC)")
+    else()
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
+        message(STATUS "Dynamic linking C++ standard library (MSVC)")
+    endif()
 endif()
 
 # Get project sources
@@ -79,37 +66,42 @@ add_library(
     ${PROJECT_SOURCE}
 )
 
+include_directories(SYSTEM ${LIBUSB_INCLUDE_DIRS})
+
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE libusb-1.0)
+    find_package(PkgConfig REQUIRED)
+    set(VCPKG_LIBRARY_LINKAGE static)
+    set(VCPKG_BUILD_TYPE release)
+    pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${LIBUSB_INCLUDE_DIRS})
+    target_link_directories(${PROJECT_NAME} PRIVATE "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBUSB_LIBRARIES})
 elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
 endif()
 
-# Enable LTO optimization
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    INTERPROCEDURAL_OPTIMIZATION TRUE
-)
-
-option(STATIC_LINK_STDCPP "Statically link the C++ standard library" OFF)
-if(STATIC_LINK_STDCPP)
-    if(MSVC)
-        message(FATAL_ERROR "Not currently supported.")
-    else()
-        # GCC/Clang
+if(NOT MSVC)
+    # GCC/Clang
+    if(STATIC_LINK_STDCPP)
         target_compile_options(${PROJECT_NAME} PRIVATE
             -fdata-sections
             -ffunction-sections
         )
         target_link_options(${PROJECT_NAME} PRIVATE -static-libstdc++ -static-libgcc)
         target_link_options(${PROJECT_NAME} PRIVATE -Wl,--exclude-libs,ALL -Wl,--gc-sections)
+        message(STATUS "Static linking C++ standard library")
+    else()
+        message(STATUS "Dynamic linking C++ standard library")
     endif()
-    message(STATUS "Static linking C++ standard library")
-else()
-    message(STATUS "Dynamic linking C++ standard library")
 endif()
+
+# Enable LTO optimization
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION TRUE
+)
 
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)

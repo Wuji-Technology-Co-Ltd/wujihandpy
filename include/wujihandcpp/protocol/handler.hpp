@@ -6,6 +6,8 @@
 
 #include <type_traits>
 
+#include "utility/cross_os.hpp"
+
 namespace wujihandcpp {
 namespace protocol {
 
@@ -66,37 +68,36 @@ public:
         static_assert(sizeof(void*) == 8, "");
     };
 
-    explicit Handler(
+    API explicit Handler(
         uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
         size_t storage_unit_count);
 
-    ~Handler();
+    API ~Handler();
 
-    void init_storage_info(int storage_id, StorageInfo info);
+    API void init_storage_info(int storage_id, StorageInfo info);
 
-    void read_async_unchecked(int storage_id);
+    API void read_async_unchecked(int storage_id);
 
-    void read_async(
+    API void read_async(
         int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context);
 
-    void write_async_unchecked(Buffer8 data, int storage_id);
+    API void write_async_unchecked(Buffer8 data, int storage_id);
 
-    void write_async(
+    API void write_async(
         Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
         Buffer8 callback_context);
 
-    void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp);
+    API void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp);
 
-    bool trigger_transmission();
+    API bool trigger_transmission();
 
-    Buffer8 get(int storage_id);
+    API Buffer8 get(int storage_id);
 
-    void disable_thread_safe_check();
+    API void disable_thread_safe_check();
 
 private:
     class Impl;
-    static constexpr size_t impl_align = 8;
-    alignas(impl_align) uint8_t impl_[760];
+    Impl* impl_;
 };
 
 } // namespace protocol

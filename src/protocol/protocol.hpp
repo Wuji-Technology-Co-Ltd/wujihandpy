@@ -56,13 +56,13 @@ template <is_type_erased_integral T>
 PACKED_STRUCT(Write {
     uint8_t control = []() constexpr {
         if constexpr (sizeof(T) == 1)
-            return 0x20;
+            return uint8_t(0x20);
         else if constexpr (sizeof(T) == 2)
-            return 0x22;
+            return uint8_t(0x22);
         else if constexpr (sizeof(T) == 4)
-            return 0x24;
+            return uint8_t(0x24);
         else if constexpr (sizeof(T) == 8)
-            return 0x28;
+            return uint8_t(0x28);
     }();
     utility::be_uint16_t index;
     uint8_t sub_index;

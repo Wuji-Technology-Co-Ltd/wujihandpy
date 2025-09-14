@@ -2,6 +2,8 @@
 
 #include <atomic>
 
+#include "utility/cross_os.hpp"
+
 namespace wujihandcpp {
 namespace device {
 
@@ -10,11 +12,11 @@ public:
     template <typename T>
     friend class DataOperator;
 
-    void wait();
+    API void wait();
 
 private:
-    void count_up();
-    void count_down();
+    API void count_up();
+    API void count_down();
 
     std::atomic<int> waiting_count_{0};
 };

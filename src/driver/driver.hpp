@@ -22,7 +22,7 @@ concept is_legal_transfer_prefill =
 template <typename Device>
 class Driver {
 public:
-    template <is_legal_transfer_prefill TransferPrefill = void>
+    template <typename TransferPrefill = void>
     class AsyncTransmitBuffer;
 
     explicit Driver(uint16_t usb_vid, int32_t usb_pid, const char* serial_number) {

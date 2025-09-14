@@ -12,9 +12,11 @@
 namespace wujihandcpp::driver {
 
 template <typename Device>
-template <is_legal_transfer_prefill TransferPrefill>
+template <typename TransferPrefill>
 class Driver<Device>::AsyncTransmitBuffer final {
 public:
+    static_assert(is_legal_transfer_prefill<TransferPrefill>);
+
     explicit AsyncTransmitBuffer(Driver& driver, size_t alloc_transfer_count)
         : driver_(driver)
         , free_transfers_(alloc_transfer_count)
@@ -192,7 +194,7 @@ private:
         if constexpr (std::is_same_v<TransferPrefill, void>)
             return 0;
         else
-            return sizeof(TransferPrefill);
+            return int(sizeof(TransferPrefill));
     }();
 
     Driver& driver_;

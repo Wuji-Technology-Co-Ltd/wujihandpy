@@ -9,6 +9,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
@@ -199,7 +200,7 @@ private:
             storage.value.store(data, std::memory_order::relaxed);
     }
 
-    static constexpr int32_t to_raw_position(double angle) {
+    static int32_t to_raw_position(double angle) {
         return static_cast<int32_t>(std::round(
             std::clamp<double>(
                 angle * (std::numeric_limits<int32_t>::max() / (2 * std::numbers::pi)),
@@ -256,7 +257,7 @@ private:
 
                 return true;
             },
-            [](int) { return sizeof(protocol::pdo::Write); });
+            [](int) { return int(sizeof(protocol::pdo::Write)); });
         if (!buffer)
             throw std::runtime_error{"No buffer available!"};
 
@@ -520,12 +521,10 @@ private:
 API Handler::Handler(
     uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
     size_t storage_unit_count) {
-    static_assert(impl_align == alignof(Handler::Impl));
-    static_assert(sizeof(impl_) == sizeof(Handler::Impl));
-    new (impl_) Impl{usb_vid, usb_pid, serial_number, buffer_transfer_count, storage_unit_count};
+    impl_ = new Impl{usb_vid, usb_pid, serial_number, buffer_transfer_count, storage_unit_count};
 }
 
-API Handler::~Handler() { std::destroy_at(reinterpret_cast<Impl*>(impl_)); }
+API Handler::~Handler() { delete impl_; }
 
 API void Handler::init_storage_info(int storage_id, StorageInfo info) {
     reinterpret_cast<Impl*>(impl_)->init_storage_info(storage_id, info);
