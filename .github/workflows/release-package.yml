@@ -16,11 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup vcpkg
+      - name: Install dependencies with vcpkg (Windows)
         if: startsWith(matrix.os, 'windows')
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: "${{ runner.temp }}/vcpkg"
+        run: |
+          vcpkg install libusb:x64-windows
 
       - uses: actions/setup-python@v5
 
@@ -30,7 +29,7 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          VCPKG_ROOT: "${{ runner.temp }}/vcpkg"
+          VCPKG_ROOT: ${{ env.VCPKG_INSTALLATION_ROOT }}
 
       - uses: actions/upload-artifact@v4
         with:
