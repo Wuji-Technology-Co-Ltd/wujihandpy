@@ -35,5 +35,5 @@ before-all = "dnf install -y libusbx libusbx-devel"
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
 repair-wheel-command = '''
-delvewheel repair --add-path "%VCPKG_ROOT%\\installed\\x64-windows\\bin" -w {dest_dir} {wheel}
+delvewheel repair --add-path "%VCPKG_ROOT%\\installed\\%VCPKG_TRIPLET%\\bin" -w {dest_dir} {wheel}
 '''
