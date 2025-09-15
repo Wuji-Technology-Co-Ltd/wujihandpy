@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Check vcpkg env var in gha
         run: |
-          echo $env:VCPKG_INSTALLATION_ROOT
+          echo $env:CIBW_ENVIRONMENT_WINDOWS
         env:
           CIBW_ENVIRONMENT_WINDOWS: >-
             VCPKG_ROOT="$env:VCPKG_INSTALLATION_ROOT"
@@ -44,7 +44,7 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_ENVIRONMENT_WINDOWS: >-
-            VCPKG_ROOT="$env:VCPKG_INSTALLATION_ROOT"
+            VCPKG_ROOT="C:/vcpkg"
 
       - uses: actions/upload-artifact@v4
         with:
