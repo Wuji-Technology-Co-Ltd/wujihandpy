@@ -26,7 +26,8 @@ sdist.include = ["src/wujihandpy/_version.py"]
 write_to = "src/wujihandpy/_version.py"
 
 [tool.cibuildwheel]
-archs = ["auto64"]
+archs = ["native"]
+skip = "*-musllinux*"
 
 [tool.cibuildwheel.linux]
 before-build = "dnf install -y libusbx libusbx-devel"

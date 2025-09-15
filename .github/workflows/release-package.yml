@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies with vcpkg (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
-          vcpkg install libusb:x64-windows
+          vcpkg install libusb
 
       - name: Setup Python
         uses: actions/setup-python@v6
