@@ -15,16 +15,11 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm]
 
     steps:
-      - name: Check vcpkg env var in gha
-        run: |
-          echo $env:CIBW_ENVIRONMENT_WINDOWS
-        env:
-          CIBW_ENVIRONMENT_WINDOWS: >-
-            VCPKG_ROOT="%VCPKG_INSTALLATION_ROOT%"
-
       - name: Checkout code
         uses: actions/checkout@v5
-        with:
+        with:          
+          fetch-depth: 0
+          fetch-tags: true
           submodules: recursive
 
       - name: Install dependencies with vcpkg (Windows)
@@ -66,7 +61,6 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref_type == 'tag'
     environment:
       name: pypi
       url: https://pypi.org/p/wujihandpy
