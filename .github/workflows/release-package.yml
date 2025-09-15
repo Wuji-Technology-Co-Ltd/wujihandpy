@@ -20,7 +20,7 @@ jobs:
           echo $env:CIBW_ENVIRONMENT_WINDOWS
         env:
           CIBW_ENVIRONMENT_WINDOWS: >-
-            VCPKG_ROOT="$env:VCPKG_INSTALLATION_ROOT"
+            VCPKG_ROOT="%VCPKG_INSTALLATION_ROOT%"
 
       - name: Checkout code
         uses: actions/checkout@v5
@@ -30,7 +30,13 @@ jobs:
       - name: Install dependencies with vcpkg (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
-          vcpkg install libusb
+          if ("${{ matrix.os }}" -eq "windows-latest") {
+            $VCPKG_TRIPLET = "x64-windows"
+          } elseif ("${{ matrix.os }}" -eq "windows-11-arm") {
+            $VCPKG_TRIPLET = "arm64-windows"
+          }
+          echo "VCPKG_TRIPLET=$VCPKG_TRIPLET" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          vcpkg install libusb:$VCPKG_TRIPLET
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -41,10 +47,9 @@ jobs:
         run: python -m pip install cibuildwheel
 
       - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
-        env:
-          CIBW_ENVIRONMENT_WINDOWS: >-
-            VCPKG_ROOT="C:/vcpkg"
+        run: |
+          $env:CIBW_ENVIRONMENT_WINDOWS = "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT VCPKG_TRIPLET=$env:VCPKG_TRIPLET"
+          python -m cibuildwheel --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v4
         with:

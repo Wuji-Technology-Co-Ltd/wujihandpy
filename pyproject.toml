@@ -30,7 +30,7 @@ archs = ["native"]
 skip = "*-musllinux*"
 
 [tool.cibuildwheel.linux]
-before-build = "dnf install -y libusbx libusbx-devel"
+before-all = "dnf install -y libusbx libusbx-devel"
 
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
