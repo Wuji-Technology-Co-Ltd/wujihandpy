@@ -7,42 +7,57 @@ on:
 
 jobs:
   build:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-        with:
+        with:          
+          fetch-depth: 0
+          fetch-tags: true
           submodules: recursive
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install dependencies with vcpkg (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          if ("${{ matrix.os }}" -eq "windows-latest") {
+            $VCPKG_TRIPLET = "x64-windows"
+          } elseif ("${{ matrix.os }}" -eq "windows-11-arm") {
+            $VCPKG_TRIPLET = "arm64-windows"
+          }
+          echo "VCPKG_TRIPLET=$VCPKG_TRIPLET" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          vcpkg install libusb:$VCPKG_TRIPLET
 
-      - name: Build release package (${{ matrix.arch }})
-        uses: docker/build-push-action@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
-          context: .
-          file: Dockerfile.package-builder
-          outputs: type=local,dest=package-build/
-          cache-from: type=gha,scope=release-build-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=release-build-${{ matrix.arch }}
+          python-version: "3.13"
 
-      - name: List built packages
-        run: ls package-build
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
 
-      - name: Upload built packages
-        uses: actions/upload-artifact@v4
+      - name: Build wheels (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: python -m cibuildwheel --output-dir wheelhouse
+
+      - name: Build wheels (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          $VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT -replace '\\','/'
+          $env:CIBW_ENVIRONMENT_WINDOWS = "VCPKG_ROOT=$VCPKG_ROOT VCPKG_TRIPLET=$env:VCPKG_TRIPLET"
+          python -m cibuildwheel --output-dir wheelhouse
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.arch }}
-          path: package-build/*.whl
+          name: dist-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
 
-  publish-to-pypi:
+  publish:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
@@ -85,8 +100,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.GIT_TAG }}
-          name: ${{ env.GIT_TAG }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           body_path: changelog.md
           draft: false
           prerelease: ${{ github.ref_type != 'tag' }}
