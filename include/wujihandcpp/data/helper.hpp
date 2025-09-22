@@ -24,7 +24,7 @@ struct ReadOnlyData {
 
     using ValueType = ValueType_;
 
-    static constexpr StorageInfo info(uint64_t) {
+    static constexpr StorageInfo info(uint32_t) {
         return StorageInfo{sizeof(ValueType), index, sub_index, 0};
     }
 }; // namespace data
@@ -43,7 +43,7 @@ struct WriteOnlyData {
 
     using ValueType = ValueType_;
 
-    static constexpr StorageInfo info(uint64_t) {
+    static constexpr StorageInfo info(uint32_t) {
         return StorageInfo{sizeof(ValueType), index, sub_index, 0};
     }
 };

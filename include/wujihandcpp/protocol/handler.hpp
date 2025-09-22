@@ -33,12 +33,13 @@ public:
         enum class Size : uint32_t { _1, _2, _4, _8 } size : 2;
         enum Policy : uint32_t {
             NONE = 0,
-            POSITION_FLOATING = 0x01,
-            POSITION_REVERSED = 0x02,
-            VELOCITY_FLOATING = 0x04,
-            VELOCITY_REVERSED = 0x08,
-            CURRENT_FLOATING = 0x10,
-            CURRENT_REVERSED = 0x20,
+            MASKED = 1ul << 0,
+            POSITION_FLOATING = 1ul << 1,
+            POSITION_REVERSED = 1ul << 2,
+            VELOCITY_FLOATING = 1ul << 3,
+            VELOCITY_REVERSED = 1ul << 4,
+            CURRENT_FLOATING = 1ul << 5,
+            CURRENT_REVERSED = 1ul << 6,
         };
         uint32_t policy : 30;
     };

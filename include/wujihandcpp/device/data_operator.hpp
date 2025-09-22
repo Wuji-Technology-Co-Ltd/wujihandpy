@@ -103,10 +103,6 @@ public:
         });
     }
 
-    // TODO
-    // template <typename Data>
-    // void set_data_read_callback();
-
     template <typename Data>
     SDK_CPP20_REQUIRES(Data::readable)
     void read_async_unchecked() {
@@ -201,29 +197,49 @@ private:
 
     class StorageInitializer {
     public:
-        explicit StorageInitializer(T& self, uint64_t i)
+        explicit StorageInitializer(T& self, uint32_t mask, uint32_t i, uint32_t shape)
             : self_(self)
-            , i_(i) {}
+            , mask_(mask)
+            , i_(i)
+            , shape_(shape) {}
 
         template <int index, typename U>
         void operator()() const {
             Handler& handler = self_.handler_;
             StorageInfo info = U::info(i_);
             info.index += self_.index_offset_;
+
+            auto flat_i = ((i_ & 0xFF00) >> 8) * (shape_ & 0xFF) + (i_ & 0xFF);
+            if (shape_ && (mask_ & (1ul << flat_i)))
+                info.policy |= StorageInfo::MASKED;
+
             handler.init_storage_info(self_.storage_offset_ + index, info);
+
+            // std::cout << std::format(
+            //     "[{:3}]: {{{:04X}, {:04X}, {:2}}} 0x{:02X}, {:2} ({}) = {:04X} {}\n",
+            //     self_.storage_offset_ + index, i_, shape_, flat_i, (int)info.index,
+            //     (int)info.sub_index,
+            //     info.size == StorageInfo::Size::_1 ? 1
+            //                                        : (info.size == StorageInfo::Size::_2   ? 2
+            //                                           : info.size == StorageInfo::Size::_4 ? 4
+            //                                                                                : 8),
+            //     (int)info.policy, info.policy & StorageInfo::MASKED ? "(MASKED)" : "");
         }
 
     private:
         T& self_;
-        uint64_t i_;
+        uint32_t mask_;
+        uint32_t i_, shape_;
     };
 
     template <typename U>
     static decltype(std::declval<typename U::Sub>(), void())
-        init_storage_info_internal(U& self, uint64_t i) {
+        init_storage_info_internal(U& self, uint32_t mask, uint32_t i, uint32_t shape) {
         i <<= 8;
+        shape <<= 8;
+        shape |= U::sub_count_;
         for (int j = 0; j < U::sub_count_; i++, j++)
-            self.sub(j).init_storage_info(i);
+            self.sub(j).init_storage_info(mask, i, shape);
     }
 
     template <typename U>
@@ -232,12 +248,12 @@ private:
 protected:
     static constexpr int data_count() { return data_count_internal<T>(0); }
 
-    void init_storage_info(uint64_t i = 0) {
+    void init_storage_info(uint32_t mask, uint32_t i = 0, uint32_t shape = 0) {
         T& self = *static_cast<T*>(this);
-        auto initializer = StorageInitializer(self, i);
+        auto initializer = StorageInitializer(self, mask, i, shape);
         T::Datas::iterate(initializer);
 
-        init_storage_info_internal<T>(self, i);
+        init_storage_info_internal<T>(self, mask, i, shape);
     }
 };
 

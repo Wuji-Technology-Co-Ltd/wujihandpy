@@ -39,25 +39,25 @@ static constexpr uint32_t position_policy(uint64_t i) {
 } // namespace internal
 
 struct Position : ReadOnlyData<device::Joint, 0x64, 0, double> {
-    static constexpr StorageInfo info(uint64_t i) {
+    static constexpr StorageInfo info(uint32_t i) {
         return StorageInfo{sizeof(uint32_t), index, sub_index, internal::position_policy(i)};
     }
 };
 struct ControlPosition : WriteOnlyData<device::Joint, 0x7A, 0, double> {
-    static constexpr StorageInfo info(uint64_t i) {
+    static constexpr StorageInfo info(uint32_t i) {
         return StorageInfo{sizeof(uint32_t), index, sub_index, internal::position_policy(i)};
     }
 };
 
 struct UpperLimit : ReadOnlyData<device::Joint, 0x0E, 27, double> {
-    static constexpr StorageInfo info(uint64_t i) {
+    static constexpr StorageInfo info(uint32_t i) {
         return StorageInfo{
             sizeof(uint32_t), index, internal::is_reversed_joint(i) ? uint8_t(28) : sub_index,
             internal::position_policy(i)};
     }
 };
 struct LowerLimit : ReadOnlyData<device::Joint, 0x0E, 28, double> {
-    static constexpr StorageInfo info(uint64_t i) {
+    static constexpr StorageInfo info(uint32_t i) {
         return StorageInfo{
             sizeof(uint32_t), index, internal::is_reversed_joint(i) ? uint8_t(27) : sub_index,
             internal::position_policy(i)};

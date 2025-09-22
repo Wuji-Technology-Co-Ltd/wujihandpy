@@ -44,14 +44,6 @@ public:
     ~Impl() { stop_handling_events(); };
 
     void init_storage_info(int storage_id, StorageInfo info) {
-        // std::cout << std::format(
-        //     "[{:3}]: 0x{:02X}, {:2} ({}) = {:04X}\n", storage_id, (int)info.index,
-        //     (int)info.sub_index,
-        //     info.size == StorageInfo::Size::_1 ? 1
-        //                                        : (info.size == StorageInfo::Size::_2   ? 2
-        //                                           : info.size == StorageInfo::Size::_4 ? 4
-        //                                                                                : 8),
-        //     (int)info.policy);
         storage_[storage_id].info = info;
         IndexMapKey index{.index = info.index, .sub_index = info.sub_index};
         index_storage_map_[std::bit_cast<uint32_t>(index)] = &storage_[storage_id];
@@ -428,10 +420,11 @@ private:
                 if (operation.mode == Operation::Mode::NONE)
                     continue;
 
+                if (storage.info.policy & Handler::StorageInfo::MASKED)
+                    operation.state = Operation::State::SUCCESS;
                 if (operation.state == Operation::State::SUCCESS) {
                     operation.mode = Operation::Mode::NONE;
                     storage.operation.store(operation, std::memory_order::relaxed);
-
                     if (storage.callback)
                         storage.callback(
                             storage.callback_context,

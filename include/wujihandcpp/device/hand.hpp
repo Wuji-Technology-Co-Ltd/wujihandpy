@@ -21,9 +21,9 @@ class Hand : public DataOperator<Hand> {
 public:
     explicit Hand(
         const char* serial_number = nullptr, int32_t usb_pid = -1, uint16_t usb_vid = 0x0483,
-        size_t buffer_transfer_count = 64)
-        : handler_(usb_vid, usb_pid, serial_number, buffer_transfer_count, data_count()) {
-        init_storage_info();
+        uint32_t mask = 0)
+        : handler_(usb_vid, usb_pid, serial_number, 64, data_count()) {
+        init_storage_info(mask);
         write<data::joint::CurrentLimit>(1000);
     };
 
