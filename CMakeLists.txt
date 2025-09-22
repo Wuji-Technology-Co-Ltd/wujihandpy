@@ -1,5 +1,24 @@
 cmake_minimum_required(VERSION 3.15)
 
+if(DEFINED pybind11_ROOT AND pybind11_ROOT STREQUAL "AUTO_DETECT")
+    execute_process(
+        COMMAND "python" -m pybind11 --cmakedir
+        RESULT_VARIABLE _pybind11_rc
+        OUTPUT_VARIABLE _pybind11_cmake_dir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    if(_pybind11_rc EQUAL 0 AND IS_DIRECTORY "${_pybind11_cmake_dir}")
+        set(pybind11_ROOT "${_pybind11_cmake_dir}"
+            CACHE PATH "pybind11 root (auto-detected from 'python -m pybind11 --cmakedir')" FORCE)
+    else()
+        message(FATAL_ERROR
+            "AUTO_DETECT for pybind11_ROOT failed: "
+            "return code=${_pybind11_rc}, stdout='${_pybind11_cmake_dir}'. "
+            "Set pybind11_ROOT manually.")
+    endif()
+endif()
+
 if(WIN32)
     if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
         if(DEFINED ENV{VCPKG_ROOT})
