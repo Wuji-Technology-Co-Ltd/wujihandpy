@@ -1,3 +1,5 @@
+#include <type_traits>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
 #include <wujihandcpp/device/finger.hpp>
@@ -7,6 +9,17 @@
 #include "wrapper.hpp"
 
 namespace py = pybind11;
+
+template <typename Data>
+void register_py_interface(const std::string&) {}
+
+template <typename Data, typename T, typename... Others>
+void register_py_interface(const std::string& name, py::class_<T>& py_class, Others&... others) {
+    T::template register_py_interface<Data>(
+        py_class,
+        std::is_same_v<typename Data::Base, wujihandcpp::device::Joint> ? "joint_" + name : name);
+    register_py_interface<Data>(name, others...);
+}
 
 PYBIND11_MODULE(_core, m) {
     using namespace wujihandcpp;
@@ -18,24 +31,15 @@ PYBIND11_MODULE(_core, m) {
         py::arg("serial_number") = py::none(), py::arg("usb_pid") = -1, py::arg("usb_vid") = 0x0483,
         py::arg("mask") = py::none());
 
-    Hand::register_py_interface<data::hand::FirmwareVersion>(hand, "firmware_version");
-    Hand::register_py_interface<data::hand::FirmwareDate>(hand, "firmware_date");
-    Hand::register_py_interface<data::hand::SystemTime>(hand, "system_time");
-    Hand::register_py_interface<data::hand::McuTemperature>(hand, "mcu_temperature");
-    Hand::register_py_interface<data::hand::InputVoltage>(hand, "input_voltage");
-
-    Hand::register_py_interface<data::hand::PdoEnabled>(hand, "pdo_enabled");
-    Hand::register_py_interface<data::hand::GlobalTpdoId>(hand, "global_tpdo_id");
-    Hand::register_py_interface<data::hand::JointPdoInterval>(hand, "pdo_interval");
-
-    Hand::register_py_interface<data::joint::ControlMode>(hand, "joint_control_mode");
-    Hand::register_py_interface<data::joint::SinLevel>(hand, "joint_sin_level");
-    Hand::register_py_interface<data::joint::CurrentLimit>(hand, "joint_current_limit");
-    Hand::register_py_interface<data::joint::ControlWord>(hand, "joint_control_word");
-    Hand::register_py_interface<data::joint::Position>(hand, "joint_position");
-    Hand::register_py_interface<data::joint::ControlPosition>(hand, "joint_control_position");
-    Hand::register_py_interface<data::joint::UpperLimit>(hand, "joint_upper_limit");
-    Hand::register_py_interface<data::joint::LowerLimit>(hand, "joint_lower_limit");
+    register_py_interface<data::hand::Handedness>("handedness", hand);
+    register_py_interface<data::hand::FirmwareVersion>("firmware_version", hand);
+    register_py_interface<data::hand::FirmwareDate>("firmware_date", hand);
+    register_py_interface<data::hand::SystemTime>("system_time", hand);
+    register_py_interface<data::hand::Temperature>("temperature", hand);
+    register_py_interface<data::hand::InputVoltage>("input_voltage", hand);
+    register_py_interface<data::hand::PdoEnabled>("pdo_enabled", hand);
+    register_py_interface<data::hand::GlobalTpdoId>("global_tpdo_id", hand);
+    register_py_interface<data::hand::JointPdoInterval>("pdo_interval", hand);
 
     hand.def(
         "pdo_write_unchecked",
@@ -48,25 +52,22 @@ PYBIND11_MODULE(_core, m) {
     auto finger = py::class_<Finger>(m, "Finger");
     hand.def("finger", &Hand::finger, py::arg("index"));
 
-    Finger::register_py_interface<data::joint::ControlMode>(finger, "joint_control_mode");
-    Finger::register_py_interface<data::joint::SinLevel>(finger, "joint_sin_level");
-    Finger::register_py_interface<data::joint::CurrentLimit>(finger, "joint_current_limit");
-    Finger::register_py_interface<data::joint::ControlWord>(finger, "joint_control_word");
-    Finger::register_py_interface<data::joint::Position>(finger, "joint_position");
-    Finger::register_py_interface<data::joint::ControlPosition>(finger, "joint_control_position");
-    Finger::register_py_interface<data::joint::UpperLimit>(finger, "joint_upper_limit");
-    Finger::register_py_interface<data::joint::LowerLimit>(finger, "joint_lower_limit");
-
     using Joint = Wrapper<wujihandcpp::device::Joint>;
     auto joint = py::class_<Joint>(m, "Joint");
     finger.def("joint", &Finger::joint, py::arg("index"));
 
-    Joint::register_py_interface<data::joint::ControlMode>(joint, "joint_control_mode");
-    Joint::register_py_interface<data::joint::SinLevel>(joint, "joint_sin_level");
-    Joint::register_py_interface<data::joint::CurrentLimit>(joint, "joint_current_limit");
-    Joint::register_py_interface<data::joint::ControlWord>(joint, "joint_control_word");
-    Joint::register_py_interface<data::joint::Position>(joint, "joint_position");
-    Joint::register_py_interface<data::joint::ControlPosition>(joint, "joint_control_position");
-    Joint::register_py_interface<data::joint::UpperLimit>(joint, "joint_upper_limit");
-    Joint::register_py_interface<data::joint::LowerLimit>(joint, "joint_lower_limit");
+    register_py_interface<data::joint::HardwareVersion>("hardware_version", hand, finger, joint);
+    register_py_interface<data::joint::HardwareDate>("hardware_date", hand, finger, joint);
+    register_py_interface<data::joint::ControlMode>("control_mode", hand, finger, joint);
+    register_py_interface<data::joint::SinLevel>("sin_level", hand, finger, joint);
+    register_py_interface<data::joint::CurrentLimit>("current_limit", hand, finger, joint);
+    register_py_interface<data::joint::BusVoltage>("bus_voltage", hand, finger, joint);
+    register_py_interface<data::joint::Temperature>("temperature", hand, finger, joint);
+    register_py_interface<data::joint::ResetError>("reset_error", hand, finger, joint);
+    register_py_interface<data::joint::ErrorCode>("error_code", hand, finger, joint);
+    register_py_interface<data::joint::ControlWord>("control_word", hand, finger, joint);
+    register_py_interface<data::joint::Position>("position", hand, finger, joint);
+    register_py_interface<data::joint::ControlPosition>("control_position", hand, finger, joint);
+    register_py_interface<data::joint::UpperLimit>("upper_limit", hand, finger, joint);
+    register_py_interface<data::joint::LowerLimit>("lower_limit", hand, finger, joint);
 }
