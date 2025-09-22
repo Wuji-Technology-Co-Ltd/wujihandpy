@@ -34,7 +34,8 @@ public:
     ~Driver() {
         libusb_free_transfer(libusb_receive_transfer_);
         libusb_release_interface(libusb_device_handle_, target_interface_);
-        libusb_attach_kernel_driver(libusb_device_handle_, 0);
+        if constexpr (utility::is_linux())
+            libusb_attach_kernel_driver(libusb_device_handle_, 0);
         libusb_close(libusb_device_handle_);
         libusb_exit(libusb_context_);
     }
