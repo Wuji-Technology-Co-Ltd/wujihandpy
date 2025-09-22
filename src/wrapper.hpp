@@ -2,11 +2,14 @@
 
 #include <atomic>
 #include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
+#include <pybind11/stl.h>
 #include <wujihandcpp/data/hand.hpp>
 #include <wujihandcpp/data/joint.hpp>
 #include <wujihandcpp/device/latch.hpp>
@@ -16,7 +19,29 @@ namespace py = pybind11;
 template <typename T>
 class Wrapper : private T {
 public:
-    using T::T;
+    explicit Wrapper(
+        std::optional<std::string> serial_number, int32_t usb_pid, uint16_t usb_vid,
+        std::optional<py::array_t<bool>> mask)
+        : T(serial_number ? serial_number->c_str() : nullptr, usb_pid, usb_vid,
+            parse_array_mask(mask)) {};
+
+    uint32_t parse_array_mask(std::optional<py::array_t<bool>> mask) {
+        if (!mask)
+            return 0;
+        if (mask->ndim() != 2 || mask->shape()[0] != 5 || mask->shape()[1] != 4)
+            throw std::runtime_error("Mask shape must be {5, 4}!");
+
+        auto r = mask->unchecked<2>();
+        int k = 0;
+        uint32_t result = 0;
+        for (int i = 0; i < 5; i++)
+            for (int j = 0; j < 4; j++) {
+                if (r(i, j))
+                    result |= 1ul << k;
+                k++;
+            }
+        return result;
+    }
 
     explicit Wrapper(T&& t)
         : T(std::move(t)) {}

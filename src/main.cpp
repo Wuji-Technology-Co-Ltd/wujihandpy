@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
 #include <wujihandcpp/device/finger.hpp>
 #include <wujihandcpp/device/hand.hpp>
 #include <wujihandcpp/device/joint.hpp>
@@ -13,8 +14,9 @@ PYBIND11_MODULE(_core, m) {
     using Hand = Wrapper<wujihandcpp::device::Hand>;
     auto hand = py::class_<Hand>(m, "Hand");
     hand.def(
-        py::init<const char*, int32_t, uint16_t>(), py::arg("serial_number") = nullptr,
-        py::arg("usb_pid") = -1, py::arg("usb_vid") = 0x0483);
+        py::init<std::optional<std::string>, int32_t, uint16_t, std::optional<py::array_t<bool>>>(),
+        py::arg("serial_number") = py::none(), py::arg("usb_pid") = -1, py::arg("usb_vid") = 0x0483,
+        py::arg("mask") = py::none());
 
     Hand::register_py_interface<data::hand::FirmwareVersion>(hand, "firmware_version");
     Hand::register_py_interface<data::hand::FirmwareDate>(hand, "firmware_date");
