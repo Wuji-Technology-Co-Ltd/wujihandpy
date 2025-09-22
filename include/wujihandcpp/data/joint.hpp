@@ -16,11 +16,21 @@ class Joint;
 namespace data {
 namespace joint {
 
+struct HardwareVersion : ReadOnlyData<device::Joint, 0x01, 1, uint32_t> {};
+struct HardwareDate : ReadOnlyData<device::Joint, 0x01, 2, uint32_t> {};
+
 struct ControlMode : WriteOnlyData<device::Joint, 0x02, 1, uint16_t> {};
 
 struct SinLevel : WriteOnlyData<device::Joint, 0x05, 8, uint16_t> {};
 
 struct CurrentLimit : WriteOnlyData<device::Joint, 0x07, 2, uint16_t> {};
+
+struct BusVoltage : ReadOnlyData<device::Joint, 0x0B, 8, float> {};
+struct Temperature : ReadOnlyData<device::Joint, 0x0B, 9, float> {};
+
+struct ResetError : WriteOnlyData<device::Joint, 0x0D, 4, uint16_t> {};
+
+struct ErrorCode : ReadOnlyData<device::Joint, 0x3F, 0, uint32_t> {};
 
 struct ControlWord : WriteOnlyData<device::Joint, 0x40, 0, uint16_t> {};
 

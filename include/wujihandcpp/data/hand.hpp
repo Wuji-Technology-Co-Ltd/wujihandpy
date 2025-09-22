@@ -14,11 +14,13 @@ class Joint;
 
 namespace data {
 namespace hand {
+struct Handedness : ReadOnlyData<device::Hand, 0x5090, 0, uint8_t> {};
+
 struct FirmwareVersion : ReadOnlyData<device::Hand, 0x5201, 1, uint32_t> {};
 struct FirmwareDate : ReadOnlyData<device::Hand, 0x5201, 2, uint32_t> {};
 
 struct SystemTime : ReadOnlyData<device::Hand, 0x520A, 1, uint32_t> {};
-struct McuTemperature : ReadOnlyData<device::Hand, 0x520A, 9, float> {};
+struct Temperature : ReadOnlyData<device::Hand, 0x520A, 9, float> {};
 struct InputVoltage : ReadOnlyData<device::Hand, 0x520A, 10, float> {};
 
 struct PdoEnabled : WriteOnlyData<device::Hand, 0x52A0, 5, uint8_t> {};

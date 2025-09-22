@@ -47,9 +47,9 @@ public:
 
 private:
     using Datas = DataTuple<
-        data::hand::FirmwareVersion, data::hand::FirmwareDate, data::hand::SystemTime,
-        data::hand::McuTemperature, data::hand::InputVoltage, data::hand::PdoEnabled,
-        data::hand::GlobalTpdoId, data::hand::JointPdoInterval>;
+        data::hand::Handedness, data::hand::FirmwareVersion, data::hand::FirmwareDate,
+        data::hand::SystemTime, data::hand::Temperature, data::hand::InputVoltage,
+        data::hand::PdoEnabled, data::hand::GlobalTpdoId, data::hand::JointPdoInterval>;
 
     protocol::Handler handler_;
 

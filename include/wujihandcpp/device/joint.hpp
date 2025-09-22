@@ -21,7 +21,9 @@ private:
         , storage_offset_(storage_offset) {}
 
     using Datas = DataTuple<
-        data::joint::ControlMode, data::joint::SinLevel, data::joint::CurrentLimit,
+        data::joint::HardwareVersion, data::joint::HardwareDate, data::joint::ControlMode,
+        data::joint::SinLevel, data::joint::CurrentLimit, data::joint::BusVoltage,
+        data::joint::Temperature, data::joint::ResetError, data::joint::ErrorCode,
         data::joint::ControlWord, data::joint::Position, data::joint::ControlPosition,
         data::joint::UpperLimit, data::joint::LowerLimit>;
 
