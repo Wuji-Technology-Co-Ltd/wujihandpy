@@ -6,6 +6,7 @@
 
 #include <type_traits>
 
+#include "wujihandcpp/device/controller.hpp"
 #include "wujihandcpp/utility/api.hpp"
 
 namespace wujihandcpp {
@@ -89,9 +90,9 @@ public:
         Buffer8 callback_context);
 
     WUJIHANDCPP_API void
-        pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp);
+        attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream);
 
-    WUJIHANDCPP_API bool trigger_transmission();
+    WUJIHANDCPP_API device::IRealtimeController* detach_realtime_controller();
 
     WUJIHANDCPP_API Buffer8 get(int storage_id);
 

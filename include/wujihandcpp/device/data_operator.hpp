@@ -113,10 +113,8 @@ public:
     }
 
     template <typename Data>
-    SDK_CPP20_REQUIRES(Data::readable)
     auto get() -> typename std::enable_if<
         std::is_same<typename Data::Base, T>::value, typename Data::ValueType>::type {
-        static_assert(Data::readable, "");
 
         Handler& handler = static_cast<T*>(this)->handler_;
         typename Data::ValueType value;

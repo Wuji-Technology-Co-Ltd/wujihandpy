@@ -110,27 +110,26 @@ public:
             std::memory_order::release);
     }
 
-    void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp) {
-        operation_thread_check();
+    void attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream) {
+        std::unique_ptr<device::IRealtimeController> guard(controller);
+        if (realtime_controller_)
+            throw std::runtime_error("A realtime controller is already attached.");
 
-        std::byte* buffer = fetch_pdo_buffer(default_transmit_buffer_);
-        auto payload = new (buffer) protocol::pdo::Write{};
-
-        payload->pdo_id = 0x100;
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 4; j++) {
-                payload->control_positions[i][j] = to_raw_position(control_positions[i][j]);
-                if (j == 0 && i != 0)
-                    payload->control_positions[i][j] = -payload->control_positions[i][j];
-            }
-        payload->timestamp = timestamp;
-
-        trigger_transmission();
+        realtime_controller_ = std::move(guard);
+        realtime_controller_thread_ =
+            std::jthread{[this, enable_upstream](const std::stop_token& stop_token) {
+                realtime_controller_thread_main(stop_token, enable_upstream);
+            }};
     }
 
-    bool trigger_transmission() {
-        operation_thread_check();
-        return default_transmit_buffer_.trigger_transmission();
+    device::IRealtimeController* detach_realtime_controller() {
+        if (!realtime_controller_)
+            throw std::runtime_error("No realtime controller attached.");
+
+        realtime_controller_thread_.request_stop();
+        realtime_controller_thread_.join();
+
+        return realtime_controller_.release();
     }
 
     Buffer8 get(int storage_id) { return load_data(storage_[storage_id]); }
@@ -193,6 +192,19 @@ private:
             storage.value.store(data, std::memory_order::relaxed);
     }
 
+    static Buffer8 load_data(StorageUnit& storage) {
+        Buffer8 data = storage.value.load(std::memory_order::relaxed);
+
+        if (storage.info.policy & StorageInfo::POSITION_FLOATING) {
+            auto value = extract_raw_position(data.as<int32_t>());
+            if (storage.info.policy & StorageInfo::POSITION_REVERSED)
+                value = -value;
+            return Buffer8{value};
+        }
+
+        return data;
+    }
+
     static int32_t to_raw_position(double angle) {
         return static_cast<int32_t>(std::round(
             std::clamp<double>(
@@ -200,18 +212,8 @@ private:
                 std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max())));
     }
 
-    static Buffer8 load_data(StorageUnit& storage) {
-        Buffer8 data = storage.value.load(std::memory_order::relaxed);
-
-        if (storage.info.policy & StorageInfo::POSITION_FLOATING) {
-            auto value =
-                data.as<int32_t>() * (2 * std::numbers::pi / std::numeric_limits<int32_t>::max());
-            if (storage.info.policy & StorageInfo::POSITION_REVERSED)
-                value = -value;
-            return Buffer8{value};
-        }
-
-        return data;
+    static constexpr double extract_raw_position(int32_t angle) {
+        return angle * (2 * std::numbers::pi / std::numeric_limits<int32_t>::max());
     }
 
     static std::byte*
@@ -236,10 +238,11 @@ private:
         return buffer;
     }
 
-    static std::byte* fetch_pdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer) {
+    static std::byte*
+        fetch_pdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer, int size) {
         auto buffer = transmit_buffer.try_fetch_buffer(
-            [](int free_size, libusb_transfer* transfer) {
-                if (free_size < int(sizeof(protocol::pdo::Write) + sizeof(protocol::CrcCheck)))
+            [size](int free_size, libusb_transfer* transfer) {
+                if (free_size < size + int(sizeof(protocol::CrcCheck)))
                     return false;
 
                 auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
@@ -250,7 +253,7 @@ private:
 
                 return true;
             },
-            [](int) { return int(sizeof(protocol::pdo::Write)); });
+            [size](int) { return size; });
         if (!buffer)
             throw std::runtime_error{"No buffer available!"};
 
@@ -303,6 +306,8 @@ private:
 
         if (header.type == 0x21)
             read_sdo_frame(pointer, sentinel);
+        else if (header.type == 0x11)
+            read_pdo_frame(pointer, sentinel);
     }
 
     void read_sdo_frame(std::byte*& pointer, const std::byte* sentinel) {
@@ -463,6 +468,90 @@ private:
         }
     }
 
+    void read_pdo_frame(std::byte*& pointer, const std::byte* sentinel) {
+        const auto& data = *reinterpret_cast<protocol::pdo::ReadResult*>(pointer);
+        pointer += sizeof(data);
+
+        if (pointer >= sentinel)
+            return;
+        if (data.pdo_id != 0x0101)
+            return;
+
+        for (int i = 0; i < 5; i++)
+            for (int j = 0; j < 4; j++)
+                pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
+
+        pdo_read_result_version_.store(
+            pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
+            std::memory_order::release);
+    }
+
+    void realtime_controller_thread_main(const std::stop_token& token, bool upstream_enabled) {
+        constexpr double update_rate = 1000.0;
+        constexpr auto update_period =
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(1.0 / update_rate));
+
+        auto begin = std::chrono::steady_clock::now();
+        auto next_iteration_time = begin;
+
+        if (upstream_enabled) {
+            realtime_controller_->setup(500.0);
+
+            const uint64_t old_version = pdo_read_result_version_.load(std::memory_order::relaxed);
+            while (!token.stop_requested()) {
+                pdo_read_async_unchecked();
+                next_iteration_time += update_period;
+                std::this_thread::sleep_until(next_iteration_time);
+                if (pdo_read_result_version_.load(std::memory_order::acquire) != old_version)
+                    break;
+            }
+
+            bool upstream = true;
+            while (!token.stop_requested()) {
+                if (upstream)
+                    pdo_read_async_unchecked();
+                else {
+                    device::IRealtimeController::JointPositions positions;
+                    for (int i = 0; i < 5; i++)
+                        for (int j = 0; j < 4; j++) {
+                            auto& value = positions.value[i][j];
+                            value = extract_raw_position(
+                                pdo_read_result_[i][j].load(std::memory_order::relaxed));
+                            if (j == 0 && i != 0)
+                                value = -value;
+                        }
+
+                    auto control_positions = realtime_controller_->step(&positions);
+
+                    pdo_write_async_unchecked(
+                        control_positions.value,
+                        static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                                  next_iteration_time - begin)
+                                                  .count()));
+                }
+
+                upstream = !upstream;
+                next_iteration_time += update_period;
+                std::this_thread::sleep_until(next_iteration_time);
+            }
+        } else {
+            realtime_controller_->setup(1000.0);
+
+            while (!token.stop_requested()) {
+                auto control_positions = realtime_controller_->step(nullptr);
+                pdo_write_async_unchecked(
+                    control_positions.value,
+                    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                              next_iteration_time - begin)
+                                              .count()));
+
+                next_iteration_time += update_period;
+                std::this_thread::sleep_until(next_iteration_time);
+            }
+        }
+    }
+
     static void read_async_unchecked_internal(
         AsyncTransmitBuffer<protocol::Header>& transmit_buffer, uint16_t index, uint8_t sub_index) {
         std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Read));
@@ -483,6 +572,28 @@ private:
             .sub_index = sub_index,
             .value = value,
         };
+    }
+
+    void pdo_read_async_unchecked() {
+        std::byte* buffer = fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Read));
+        new (buffer) protocol::pdo::Read{};
+        default_transmit_buffer_.trigger_transmission();
+    }
+
+    void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp) {
+        std::byte* buffer =
+            fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Write));
+        auto payload = new (buffer) protocol::pdo::Write{};
+
+        for (int i = 0; i < 5; i++)
+            for (int j = 0; j < 4; j++) {
+                payload->control_positions[i][j] = to_raw_position(control_positions[i][j]);
+                if (j == 0 && i != 0)
+                    payload->control_positions[i][j] = -payload->control_positions[i][j];
+            }
+        payload->timestamp = timestamp;
+
+        default_transmit_buffer_.trigger_transmission();
     }
 
     template <size_t size>
@@ -510,6 +621,12 @@ private:
     std::map<uint32_t, StorageUnit*> index_storage_map_;
 
     std::jthread tick_thread_;
+
+    std::atomic<int32_t> pdo_read_result_[5][4];
+    std::atomic<uint64_t> pdo_read_result_version_ = 0;
+
+    std::unique_ptr<device::IRealtimeController> realtime_controller_;
+    std::jthread realtime_controller_thread_;
 };
 
 WUJIHANDCPP_API Handler::Handler(
@@ -521,43 +638,41 @@ WUJIHANDCPP_API Handler::Handler(
 WUJIHANDCPP_API Handler::~Handler() { delete impl_; }
 
 WUJIHANDCPP_API void Handler::init_storage_info(int storage_id, StorageInfo info) {
-    reinterpret_cast<Impl*>(impl_)->init_storage_info(storage_id, info);
+    impl_->init_storage_info(storage_id, info);
 }
 
 WUJIHANDCPP_API void Handler::read_async_unchecked(int storage_id) {
-    reinterpret_cast<Impl*>(impl_)->read_async_unchecked(storage_id);
+    impl_->read_async_unchecked(storage_id);
 }
 
 WUJIHANDCPP_API void Handler::read_async(
     int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
-    reinterpret_cast<Impl*>(impl_)->read_async(storage_id, callback, callback_context);
+    impl_->read_async(storage_id, callback, callback_context);
 }
 
 WUJIHANDCPP_API void Handler::write_async_unchecked(Buffer8 data, int storage_id) {
-    reinterpret_cast<Impl*>(impl_)->write_async_unchecked(data, storage_id);
+    impl_->write_async_unchecked(data, storage_id);
 }
 
 WUJIHANDCPP_API void Handler::write_async(
     Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
     Buffer8 callback_context) {
-    reinterpret_cast<Impl*>(impl_)->write_async(data, storage_id, callback, callback_context);
+    impl_->write_async(data, storage_id, callback, callback_context);
 }
 
-WUJIHANDCPP_API void Handler::pdo_write_async_unchecked(
-    const double (&control_positions)[5][4], uint32_t timestamp) {
-    reinterpret_cast<Impl*>(impl_)->pdo_write_async_unchecked(control_positions, timestamp);
+WUJIHANDCPP_API void Handler::attach_realtime_controller(
+    device::IRealtimeController* controller, bool enable_upstream) {
+    impl_->attach_realtime_controller(controller, enable_upstream);
 }
 
-WUJIHANDCPP_API bool Handler::trigger_transmission() {
-    return reinterpret_cast<Impl*>(impl_)->trigger_transmission();
+WUJIHANDCPP_API device::IRealtimeController* Handler::detach_realtime_controller() {
+    return impl_->detach_realtime_controller();
 }
 
-WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) {
-    return reinterpret_cast<Impl*>(impl_)->get(storage_id);
-}
+WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) { return impl_->get(storage_id); }
 
 WUJIHANDCPP_API void Handler::disable_thread_safe_check() {
-    return reinterpret_cast<Impl*>(impl_)->disable_thread_safe_check();
+    return impl_->disable_thread_safe_check();
 }
 
 } // namespace wujihandcpp::protocol

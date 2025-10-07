@@ -92,8 +92,15 @@ PACKED_STRUCT(WriteResultError {
 
 namespace pdo {
 
+PACKED_STRUCT(Read { uint16_t pdo_id = 0x0100; });
+
+PACKED_STRUCT(ReadResult {
+    uint16_t pdo_id;
+    int32_t positions[5][4];
+});
+
 PACKED_STRUCT(Write {
-    utility::be_uint16_t pdo_id;
+    uint16_t pdo_id = 0x0001;
     int32_t control_positions[5][4];
     uint32_t timestamp;
 });

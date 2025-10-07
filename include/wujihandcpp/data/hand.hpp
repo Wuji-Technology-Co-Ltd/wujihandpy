@@ -24,9 +24,12 @@ struct Temperature : ReadOnlyData<device::Hand, 0x520A, 9, float> {};
 struct InputVoltage : ReadOnlyData<device::Hand, 0x520A, 10, float> {};
 
 struct PdoEnabled : WriteOnlyData<device::Hand, 0x52A0, 5, uint8_t> {};
+struct RPdoId : WriteOnlyData<device::Hand, 0x52A4, 2, uint16_t> {};
+struct TPdoId : WriteOnlyData<device::Hand, 0x52A4, 2, uint16_t> {};
 
-struct GlobalTpdoId : WriteOnlyData<device::Hand, 0x52A4, 2, uint16_t> {};
-struct JointPdoInterval : WriteOnlyData<device::Hand, 0x52A4, 5, uint32_t> {};
+struct PdoInterval : WriteOnlyData<device::Hand, 0x52A4, 5, uint32_t> {};
+struct RPdoTriggerOffset : WriteOnlyData<device::Hand, 0x52A4, 6, uint32_t> {};
+struct TPdoTriggerOffset : WriteOnlyData<device::Hand, 0x52A4, 7, uint32_t> {};
 } // namespace hand
 } // namespace data
 
