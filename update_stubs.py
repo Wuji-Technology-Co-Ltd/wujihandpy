@@ -9,7 +9,7 @@ def main():
 
 
 def post_process_async_function():
-    with open("src/wujihandpy/_core.pyi", "r") as file:
+    with open("src/wujihandpy/_core/__init__.pyi", "r") as file:
         content = file.read()
 
     sections = content.split("class")
@@ -29,7 +29,7 @@ def post_process_async_function():
             )
 
     content = "class".join(sections)
-    with open("src/wujihandpy/_core.pyi", "w") as file:
+    with open("src/wujihandpy/_core/__init__.pyi", "w") as file:
         file.write(content)
 
 
