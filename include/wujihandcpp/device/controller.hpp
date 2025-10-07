@@ -59,7 +59,12 @@ class FilteredController<FilterT, true> : public FilteredController<FilterT, fal
     using JointPositions = Base::JointPositions;
 
 public:
-    using Base::Base;
+    explicit FilteredController(const double (&initial)[5][4], const FilterT& filter)
+        : Base(initial, filter) {
+        for (size_t i = 0; i < 5; ++i)
+            for (size_t j = 0; j < 4; ++j)
+                actual_[i][j].store(initial[i][j], std::memory_order::relaxed);
+    }
 
     JointPositions step(JointPositions* actual) noexcept override {
         for (size_t i = 0; i < 5; i++)
