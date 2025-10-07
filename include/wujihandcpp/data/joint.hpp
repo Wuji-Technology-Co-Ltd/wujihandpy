@@ -32,7 +32,11 @@ struct ResetError : WriteOnlyData<device::Joint, 0x0D, 4, uint16_t> {};
 
 struct ErrorCode : ReadOnlyData<device::Joint, 0x3F, 0, uint32_t> {};
 
-struct ControlWord : WriteOnlyData<device::Joint, 0x40, 0, uint16_t> {};
+struct Enabled : WriteOnlyData<device::Joint, 0x40, 0, bool> {
+    static constexpr StorageInfo info(uint32_t) {
+        return StorageInfo{sizeof(uint16_t), index, sub_index, StorageInfo::CONTROL_WORD};
+    }
+};
 
 namespace internal {
 
@@ -42,18 +46,18 @@ static constexpr bool is_reversed_joint(uint64_t i) {
 }
 
 static constexpr uint32_t position_policy(uint64_t i) {
-    return is_reversed_joint(i) ? (StorageInfo::POSITION_FLOATING | StorageInfo::POSITION_REVERSED)
-                                : (StorageInfo::POSITION_FLOATING);
+    return is_reversed_joint(i) ? (StorageInfo::POSITION | StorageInfo::POSITION_REVERSED)
+                                : (StorageInfo::POSITION);
 }
 
 } // namespace internal
 
-struct Position : ReadOnlyData<device::Joint, 0x64, 0, double> {
+struct ActualPosition : ReadOnlyData<device::Joint, 0x64, 0, double> {
     static constexpr StorageInfo info(uint32_t i) {
         return StorageInfo{sizeof(uint32_t), index, sub_index, internal::position_policy(i)};
     }
 };
-struct ControlPosition : WriteOnlyData<device::Joint, 0x7A, 0, double> {
+struct TargetPosition : WriteOnlyData<device::Joint, 0x7A, 0, double> {
     static constexpr StorageInfo info(uint32_t i) {
         return StorageInfo{sizeof(uint32_t), index, sub_index, internal::position_policy(i)};
     }

@@ -35,12 +35,11 @@ public:
         enum Policy : uint32_t {
             NONE = 0,
             MASKED = 1ul << 0,
-            POSITION_FLOATING = 1ul << 1,
-            POSITION_REVERSED = 1ul << 2,
-            VELOCITY_FLOATING = 1ul << 3,
-            VELOCITY_REVERSED = 1ul << 4,
-            CURRENT_FLOATING = 1ul << 5,
-            CURRENT_REVERSED = 1ul << 6,
+            CONTROL_WORD = 1ul << 1,
+            POSITION = 1ul << 2,
+            POSITION_REVERSED = 1ul << 3,
+            VELOCITY = 1ul << 4,
+            VELOCITY_REVERSED = 1ul << 5,
         };
         uint32_t policy : 30;
     };

@@ -44,7 +44,7 @@ class Hand : public DataOperator<Hand> {
                 hand_.detach_realtime_controller();
         }
 
-        void set_joint_control_position(const double (&positions)[5][4]) {
+        void set_joint_target_position(const double (&positions)[5][4]) {
             controller_->set(positions);
         }
 
@@ -75,11 +75,11 @@ class Hand : public DataOperator<Hand> {
                 hand_.detach_realtime_controller();
         }
 
-        auto get_joint_position() -> const std::atomic<double> (&)[5][4] {
+        auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
             return controller_->get();
         }
 
-        void set_joint_control_position(const double (&positions)[5][4]) {
+        void set_joint_target_position(const double (&positions)[5][4]) {
             controller_->set(positions);
         }
 
@@ -96,7 +96,7 @@ public:
 
         init_storage_info(mask);
 
-        write<data::joint::ControlWord>(5);
+        write<data::joint::Enabled>(false);
         Latch latch;
         write_async<data::joint::ControlMode>(latch, 2);
         write_async<data::joint::CurrentLimit>(latch, 1000);
@@ -123,15 +123,15 @@ public:
     })
     auto realtime_controller(const FilterT& filter)
         -> ControllerOperator<FilterT, enable_upstream> {
-        uint16_t last_control_word[5][4];
-        save_and_enable_joints(last_control_word);
-        read<data::joint::Position>();
-        revert_enabled_joints(last_control_word);
+        bool last_enabled[5][4];
+        save_and_enable_joints(last_enabled);
+        read<data::joint::ActualPosition>();
+        revert_enabled_joints(last_enabled);
 
         double positions[5][4];
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++)
-                positions[i][j] = finger(i).joint(j).get<data::joint::Position>();
+                positions[i][j] = finger(i).joint(j).get<data::joint::ActualPosition>();
 
         auto controller =
             std::make_unique<FilteredController<FilterT, enable_upstream>>(positions, filter);
@@ -146,8 +146,8 @@ public:
         if (!controller)
             throw std::invalid_argument("Controller pointer must not be null.");
 
-        uint16_t last_control_word[5][4];
-        save_and_disable_joints(last_control_word);
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
 
         {
             Latch latch;
@@ -164,14 +164,14 @@ public:
             latch.wait();
         }
 
-        revert_disabled_joints(last_control_word);
+        revert_disabled_joints(last_enabled);
 
         handler_.attach_realtime_controller(controller.release(), enable_upstream);
     }
 
     std::unique_ptr<IRealtimeController> detach_realtime_controller() {
-        uint16_t last_control_word[5][4];
-        save_and_disable_joints(last_control_word);
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
 
         {
             Latch latch;
@@ -180,7 +180,7 @@ public:
             latch.wait();
         }
 
-        revert_disabled_joints(last_control_word);
+        revert_disabled_joints(last_enabled);
 
         return std::unique_ptr<IRealtimeController>{handler_.detach_realtime_controller()};
     }
@@ -188,45 +188,45 @@ public:
     void disable_thread_safe_check() { handler_.disable_thread_safe_check(); }
 
 private:
-    void save_and_enable_joints(uint16_t (&last_control_word)[5][4]) {
+    void save_and_enable_joints(bool (&last_enabled)[5][4]) {
         Latch latch;
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {
                 auto joint = finger(i).joint(j);
-                last_control_word[i][j] = joint.get<data::joint::ControlWord>();
-                if (last_control_word[i][j] != 1)
-                    joint.write_async<data::joint::ControlWord>(latch, 1);
+                last_enabled[i][j] = joint.get<data::joint::Enabled>();
+                if (!last_enabled[i][j])
+                    joint.write_async<data::joint::Enabled>(latch, true);
             }
         latch.wait();
     }
 
-    void revert_enabled_joints(const uint16_t (&last_control_word)[5][4]) {
+    void revert_enabled_joints(const bool (&last_enabled)[5][4]) {
         Latch latch;
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++)
-                if (last_control_word[i][j] != 1)
-                    finger(i).joint(j).write_async<data::joint::ControlWord>(latch, 5);
+                if (!last_enabled[i][j])
+                    finger(i).joint(j).write_async<data::joint::Enabled>(latch, false);
         latch.wait();
     }
 
-    void save_and_disable_joints(uint16_t (&last_control_word)[5][4]) {
+    void save_and_disable_joints(bool (&last_enabled)[5][4]) {
         Latch latch;
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {
                 auto joint = finger(i).joint(j);
-                last_control_word[i][j] = joint.get<data::joint::ControlWord>();
-                if (last_control_word[i][j] == 1)
-                    joint.write_async<data::joint::ControlWord>(latch, 5);
+                last_enabled[i][j] = joint.get<data::joint::Enabled>();
+                if (last_enabled[i][j])
+                    joint.write_async<data::joint::Enabled>(latch, false);
             }
         latch.wait();
     }
 
-    void revert_disabled_joints(const uint16_t (&last_control_word)[5][4]) {
+    void revert_disabled_joints(const bool (&last_enabled)[5][4]) {
         Latch latch;
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++)
-                if (last_control_word[i][j] == 1)
-                    finger(i).joint(j).write_async<data::joint::ControlWord>(latch, 1);
+                if (last_enabled[i][j])
+                    finger(i).joint(j).write_async<data::joint::Enabled>(latch, true);
         latch.wait();
     }
 

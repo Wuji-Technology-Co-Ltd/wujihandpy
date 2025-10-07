@@ -183,7 +183,11 @@ private:
     }
 
     static void store_data(StorageUnit& storage, Buffer8 data) {
-        if (storage.info.policy & StorageInfo::POSITION_FLOATING) {
+        if (storage.info.policy & StorageInfo::CONTROL_WORD) {
+            storage.value.store(
+                Buffer8{static_cast<uint16_t>(data.as<bool>() ? 1 : 5)},
+                std::memory_order::relaxed);
+        } else if (storage.info.policy & StorageInfo::POSITION) {
             auto value = to_raw_position(data.as<double>());
             if (storage.info.policy & StorageInfo::POSITION_REVERSED)
                 value = -value;
@@ -195,7 +199,9 @@ private:
     static Buffer8 load_data(StorageUnit& storage) {
         Buffer8 data = storage.value.load(std::memory_order::relaxed);
 
-        if (storage.info.policy & StorageInfo::POSITION_FLOATING) {
+        if (storage.info.policy & StorageInfo::CONTROL_WORD) {
+            return Buffer8{data.as<uint16_t>() == 1};
+        } else if (storage.info.policy & StorageInfo::POSITION) {
             auto value = extract_raw_position(data.as<int32_t>());
             if (storage.info.policy & StorageInfo::POSITION_REVERSED)
                 value = -value;
@@ -522,10 +528,10 @@ private:
                                 value = -value;
                         }
 
-                    auto control_positions = realtime_controller_->step(&positions);
+                    auto target_positions = realtime_controller_->step(&positions);
 
                     pdo_write_async_unchecked(
-                        control_positions.value,
+                        target_positions.value,
                         static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
                                                   next_iteration_time - begin)
                                                   .count()));
@@ -539,9 +545,9 @@ private:
             realtime_controller_->setup(1000.0);
 
             while (!token.stop_requested()) {
-                auto control_positions = realtime_controller_->step(nullptr);
+                auto target_positions = realtime_controller_->step(nullptr);
                 pdo_write_async_unchecked(
-                    control_positions.value,
+                    target_positions.value,
                     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
                                               next_iteration_time - begin)
                                               .count()));
@@ -580,16 +586,16 @@ private:
         default_transmit_buffer_.trigger_transmission();
     }
 
-    void pdo_write_async_unchecked(const double (&control_positions)[5][4], uint32_t timestamp) {
+    void pdo_write_async_unchecked(const double (&target_positions)[5][4], uint32_t timestamp) {
         std::byte* buffer =
             fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {
-                payload->control_positions[i][j] = to_raw_position(control_positions[i][j]);
+                payload->target_positions[i][j] = to_raw_position(target_positions[i][j]);
                 if (j == 0 && i != 0)
-                    payload->control_positions[i][j] = -payload->control_positions[i][j];
+                    payload->target_positions[i][j] = -payload->target_positions[i][j];
             }
         payload->timestamp = timestamp;
 

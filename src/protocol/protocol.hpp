@@ -101,7 +101,7 @@ PACKED_STRUCT(ReadResult {
 
 PACKED_STRUCT(Write {
     uint16_t pdo_id = 0x0001;
-    int32_t control_positions[5][4];
+    int32_t target_positions[5][4];
     uint32_t timestamp;
 });
 
