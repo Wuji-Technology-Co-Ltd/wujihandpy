@@ -92,9 +92,9 @@ public:
     }
 
     template <typename Data>
-    void write(py::numpy_scalar<typename Data::ValueType> value) {
+    void write(typename Data::ValueType value) {
         py::gil_scoped_release release;
-        T::template write<Data>(value.value);
+        T::template write<Data>(value);
     }
 
     template <typename Data>
@@ -125,7 +125,7 @@ public:
     }
 
     template <typename Data>
-    py::object write_async(py::numpy_scalar<typename Data::ValueType> value) {
+    py::object write_async(typename Data::ValueType value) {
         auto context = new FutureContext{*this, data_count<Data>()};
         T::template write_async<Data>(
             [context]() {
@@ -135,7 +135,7 @@ public:
                     delete context;
                 }
             },
-            value.value);
+            value);
 
         return context->future;
     }
@@ -175,8 +175,8 @@ public:
     }
 
     template <typename Data>
-    void write_async_unchecked(py::numpy_scalar<typename Data::ValueType> value) {
-        T::template write_async_unchecked<Data>(value.value);
+    void write_async_unchecked(typename Data::ValueType value) {
+        T::template write_async_unchecked<Data>(value);
     }
 
     template <typename Data>
@@ -256,16 +256,14 @@ public:
         if constexpr (Data::writable) {
             using V = Data::ValueType;
             py_class.def(
-                ("write_" + name).c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write<Data>), py::arg("value"));
+                ("write_" + name).c_str(), py::overload_cast<V>(&Wrapper::write<Data>),
+                py::arg("value"));
             py_class.def(
                 ("write_" + name + "_async").c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async<Data>),
-                py::arg("value"));
+                py::overload_cast<V>(&Wrapper::write_async<Data>), py::arg("value"));
             py_class.def(
                 ("write_" + name + "_unchecked").c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async_unchecked<Data>),
-                py::arg("value"));
+                py::overload_cast<V>(&Wrapper::write_async_unchecked<Data>), py::arg("value"));
             if constexpr (!std::is_same_v<typename Data::Base, T>) {
                 py_class.def(
                     ("write_" + name).c_str(),

@@ -1,5 +1,4 @@
 import wujihandpy
-import numpy as np
 import time
 import math
 
@@ -10,31 +9,28 @@ def main():
         run(hand)
     finally:
         # Disable the entire hand
-        hand.write_joint_control_word(np.uint16(5))
+        hand.write_joint_enabled(False)
 
 
 def run(hand: wujihandpy.Hand):
-    # (bulk-write) Set control mode to PP (Point to Point Mode)
+    # (bulk-write) Enable all joints
     # Equals to:
-    # for i in range (0, 5):
-    #     for j in range (0, 4):
-    #         hand.finger(i).joint(j).write_joint_control_mode(np.uint16(2))
+    # for i in range(5):
+    #     for j in range(4):
+    #         hand.finger(i).joint(j).write_joint_enabled(True)
     # Normal APIs are blocking to ensure successful operations
-    hand.write_joint_control_mode(np.uint16(2))
+    hand.write_joint_enabled(True)
 
-    # (also bulk-write) Enable all joints
-    hand.write_joint_control_word(np.uint16(1))
-
-    # Return all joints to initial point
-    hand.write_joint_control_position(np.float64(0.0))
+    # (also bulk-write) Return all joints to initial point
+    hand.write_joint_target_position(0.0)
 
     # Wait for joints to move into place
     time.sleep(0.5)
 
     # Disable non-index fingers
-    for i in range(0, 5):
+    for i in range(5):
         if i != 1:
-            hand.finger(i).write_joint_control_word(np.uint16(5))
+            hand.finger(i).write_joint_enabled(False)
 
     # 2Hz SDO Control
     update_rate = 2.0
@@ -46,9 +42,9 @@ def run(hand: wujihandpy.Hand):
 
         # Control index finger
         # Unchecked API is non-blocking (returns immediately, but success is not guaranteed)
-        hand.finger(1).joint(0).write_joint_control_position_unchecked(np.float64(y))
-        hand.finger(1).joint(2).write_joint_control_position_unchecked(np.float64(y))
-        hand.finger(1).joint(3).write_joint_control_position_unchecked(np.float64(y))
+        hand.finger(1).joint(0).write_joint_target_position_unchecked(y)
+        hand.finger(1).joint(2).write_joint_target_position_unchecked(y)
+        hand.finger(1).joint(3).write_joint_target_position_unchecked(y)
 
         x += math.pi / update_rate
         time.sleep(update_period)

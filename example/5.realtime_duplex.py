@@ -10,17 +10,18 @@ def main():
         run(hand)
     finally:
         # Disable the entire hand
-        hand.write_joint_control_word(np.uint16(5))
+        hand.write_joint_enabled(False)
 
 
 def run(hand: wujihandpy.Hand):
     # Enable all joints
-    hand.write_joint_control_word(np.uint16(1))
+    hand.write_joint_enabled(True)
 
+    # Print arrays with 2 decimal places and no scientific notation
     np.set_printoptions(precision=2, suppress=True)
 
     with hand.realtime_controller(
-        enable_upstream=True, filter=wujihandpy.filter.LowPass(cutoff_freq=10.0)
+        enable_upstream=True, filter=wujihandpy.filter.LowPass(cutoff_freq=5.0)
     ) as controller:
         # Filtered duplex realtime control (100Hz -> 1kHz)
         update_rate = 100.0
@@ -41,10 +42,10 @@ def run(hand: wujihandpy.Hand):
                 ],
                 dtype=np.float64,
             )
-            controller.set_joint_control_position(target)
+            controller.set_joint_target_position(target)
 
             # Print control error
-            error = target - controller.get_joint_position()
+            error = target - controller.get_joint_actual_position()
             print(error)
 
             x += math.pi / update_rate

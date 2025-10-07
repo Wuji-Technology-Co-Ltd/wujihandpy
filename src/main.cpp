@@ -29,9 +29,9 @@ PYBIND11_MODULE(_core, m) {
         .def(
             "__exit__", [](IController& self, const py::object&, const py::object&,
                            const py::object&) { self.close(); })
-        .def("get_joint_position", &IController::get_joint_position)
+        .def("get_joint_actual_position", &IController::get_joint_actual_position)
         .def(
-            "set_joint_control_position", &IController::set_joint_control_position,
+            "set_joint_target_position", &IController::set_joint_target_position,
             py::arg("value_array"));
 
     filter::init_module(m);
@@ -73,9 +73,9 @@ PYBIND11_MODULE(_core, m) {
     register_py_interface<data::joint::Temperature>("temperature", hand, finger, joint);
     register_py_interface<data::joint::ResetError>("reset_error", hand, finger, joint);
     register_py_interface<data::joint::ErrorCode>("error_code", hand, finger, joint);
-    register_py_interface<data::joint::ControlWord>("control_word", hand, finger, joint);
-    register_py_interface<data::joint::Position>("position", hand, finger, joint);
-    register_py_interface<data::joint::ControlPosition>("control_position", hand, finger, joint);
+    register_py_interface<data::joint::Enabled>("enabled", hand, finger, joint);
+    register_py_interface<data::joint::ActualPosition>("actual_position", hand, finger, joint);
+    register_py_interface<data::joint::TargetPosition>("target_position", hand, finger, joint);
     register_py_interface<data::joint::UpperLimit>("upper_limit", hand, finger, joint);
     register_py_interface<data::joint::LowerLimit>("lower_limit", hand, finger, joint);
 }

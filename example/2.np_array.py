@@ -10,18 +10,15 @@ def main():
         run(hand)
     finally:
         # Disable the entire hand
-        hand.write_joint_control_word(np.uint16(5))
+        hand.write_joint_enabled(False)
 
 
 def run(hand: wujihandpy.Hand):
-    # Set control mode to PP (Point to Point Mode)
-    hand.write_joint_control_mode(np.uint16(2))
-
     # Enable all joints
-    hand.write_joint_control_word(np.uint16(1))
+    hand.write_joint_enabled(True)
 
     # Return all joints to initial point
-    hand.write_joint_control_position(
+    hand.write_joint_target_position(
         np.array(
             [
                 # J1    J2    J3    J4
@@ -39,18 +36,17 @@ def run(hand: wujihandpy.Hand):
     time.sleep(0.5)
 
     # Disable non-middle fingers
-    # [5 = Disabled, 1 = Enabled]
-    hand.write_joint_control_word(
+    hand.write_joint_enabled(
         np.array(
             [
                 # J1J2 J3J4
-                [5, 5, 5, 5],  # F1
-                [5, 5, 5, 5],  # F2
+                [0, 0, 0, 0],  # F1
+                [0, 0, 0, 0],  # F2
                 [1, 1, 1, 1],  # F3
-                [5, 5, 5, 5],  # F4
-                [5, 5, 5, 5],  # F5
+                [0, 0, 0, 0],  # F4
+                [0, 0, 0, 0],  # F5
             ],
-            dtype=np.uint16,
+            dtype=np.bool,
         )
     )
 
@@ -63,7 +59,7 @@ def run(hand: wujihandpy.Hand):
         y = (1 - math.cos(x)) * 0.8
 
         # Control middle finger
-        hand.finger(2).write_joint_control_position_unchecked(
+        hand.finger(2).write_joint_target_position_unchecked(
             np.array(
                 # J1J2 J3J4
                 [y, 0, y, y],

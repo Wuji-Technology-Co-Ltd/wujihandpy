@@ -18,9 +18,9 @@ public:
 
     virtual ~IController() = default;
 
-    virtual py::array_t<double> get_joint_position() = 0;
+    virtual py::array_t<double> get_joint_actual_position() = 0;
 
-    virtual void set_joint_control_position(const py::array_t<double>&) = 0;
+    virtual void set_joint_target_position(const py::array_t<double>&) = 0;
 
     virtual void close() = 0;
 };
@@ -36,14 +36,14 @@ inline std::unique_ptr<IController>
         explicit Controller(ControllerT&& controller) noexcept
             : controller_(std::move(controller)) {}
 
-        py::array_t<double> get_joint_position() override {
+        py::array_t<double> get_joint_actual_position() override {
             if (!controller_)
                 throw std::runtime_error("Controller is closed.");
 
             if constexpr (!enable_upstream)
                 throw std::logic_error("Upstream is disabled.");
             else {
-                const auto& positions = controller_->get_joint_position();
+                const auto& positions = controller_->get_joint_actual_position();
 
                 auto buffer = new double[5 * 4];
                 for (size_t i = 0; i < 5; i++)
@@ -55,7 +55,7 @@ inline std::unique_ptr<IController>
             }
         }
 
-        void set_joint_control_position(const py::array_t<double>& array) override {
+        void set_joint_target_position(const py::array_t<double>& array) override {
             if (!controller_)
                 throw std::runtime_error("Controller is closed.");
 
@@ -63,12 +63,12 @@ inline std::unique_ptr<IController>
                 throw std::runtime_error("Array shape must be {5, 4}!");
 
             auto r = array.unchecked<2>();
-            double control_positions[5][4];
+            double target_positions[5][4];
             for (size_t i = 0; i < 5; ++i)
                 for (size_t j = 0; j < 4; ++j)
-                    control_positions[i][j] = r(i, j);
+                    target_positions[i][j] = r(i, j);
 
-            controller_->set_joint_control_position(control_positions);
+            controller_->set_joint_target_position(target_positions);
         }
 
         void close() override { controller_ = std::nullopt; }

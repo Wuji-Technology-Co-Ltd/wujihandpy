@@ -10,12 +10,12 @@ def main():
         run(hand)
     finally:
         # Disable the entire hand
-        hand.write_joint_control_word(np.uint16(5))
+        hand.write_joint_enabled(False)
 
 
 def run(hand: wujihandpy.Hand):
     # Enable all joints
-    hand.write_joint_control_word(np.uint16(1))
+    hand.write_joint_enabled(True)
 
     with hand.realtime_controller(
         enable_upstream=False, filter=wujihandpy.filter.LowPass(cutoff_freq=2.0)
@@ -27,7 +27,7 @@ def run(hand: wujihandpy.Hand):
         x = 0
         while True:
             y = (1 - math.cos(x)) * 0.8
-            controller.set_joint_control_position(
+            controller.set_joint_target_position(
                 np.array(
                     [
                         # J1J2 J3J4
