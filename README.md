@@ -82,8 +82,8 @@ hand = wujihandpy.Hand()
 ### 读数据
 
 ```python
-def read_<dataname>(self) -> np.<datatype>
-def read_<dataname>(self) -> np.array<datatype> # For bulk-read
+def read_<dataname>(self) -> datatype
+def read_<dataname>(self) -> np.ndarray[datatype] # For bulk-read
 ```
 
 所有可使用的数据均定义在 `wujihandpy/_core.pyi` 中。
@@ -99,7 +99,7 @@ time = hand.read_system_time()
 例如，读取第1个手指（食指），第0个关节的当前位置数据：
 
 ```python
-position = hand.finger(1).joint(0).read_joint_position()
+position = hand.finger(1).joint(0).read_joint_actual_position()
 ```
 
 关节角度为 `np.float64` 类型，单位为弧度，零点和正方向与 [URDF文件](https://github.com/Wuji-Technology-Co-Ltd/wujihand-urdf) 中定义的相同。
@@ -109,7 +109,7 @@ position = hand.finger(1).joint(0).read_joint_position()
 例如，以下指令读取整手所有（20个）关节的当前位置数据：
 
 ```python
-positions = hand.read_joint_position()
+positions = hand.read_joint_actual_position()
 ```
 
 进行批量读时，函数返回包含所有数据的 `np.ndarray[np.float64]`：
@@ -130,21 +130,21 @@ positions = hand.read_joint_position()
 写数据拥有类似的 API，但多了一个参数用于传递目标值：
 
 ```python
-def write_<dataname>(self, np.<datatype>)
-def write_<dataname>(self, np.array<datatype>) # For bulk-write
+def write_<dataname>(self, datatype)
+def write_<dataname>(self, np.ndarray[datatype]) # For bulk-write
 ```
 
 例如，写入单个关节的目标位置数据：
 
 ```python
-hand.finger(1).joint(0).write_joint_control_position(np.float64(0.8))
+hand.finger(1).joint(0).write_joint_target_position(0.8)
 ```
 
 各关节的合法角度范围可通过以下 API 获取：
 
 ```python
-upper = (Hand | Finger | Joint).read_joint_upper_limit()
-lower = (Hand | Finger | Joint).read_joint_lower_limit()
+upper = < Hand / Finger / Joint >.read_joint_upper_limit()
+lower = < Hand / Finger / Joint >.read_joint_lower_limit()
 ```
 
 若写入的角度超出合法范围，会被自动限幅至最高/最低值。
@@ -152,13 +152,13 @@ lower = (Hand | Finger | Joint).read_joint_lower_limit()
 **批量写**数据也是可行的，例如，批量为第一个手指写入目标位置数据：
 
 ```python
-hand.finger(1).write_joint_control_position(np.float64(0.8))
+hand.finger(1).write_joint_target_position(0.8)
 ```
 
 如果每个关节的目标值不同，可以传入一个包含所有目标值的 `np.array`：
 
 ```python
-hand.finger(1).write_joint_control_position(
+hand.finger(1).write_joint_target_position(
     np.array(
         #   J1    J2    J3    J4
         [0.8,  0.0,  0.8,  0.8],
@@ -174,10 +174,10 @@ hand.finger(1).write_joint_control_position(
 读写函数均有对应的异步版本，函数名以 `_async` 作为后缀。
 
 ``` python
-async def read_<dataname>_async(self) -> np.<datatype>
-async def read_<dataname>_async(self) -> np.array<datatype> # For bulk-read
-async def write_<dataname>_async(self, np.<datatype>)
-async def write_<dataname>_async(self, np.array<datatype>)  # For bulk-write
+async def read_<dataname>_async(self) -> datatype
+async def read_<dataname>_async(self) -> np.ndarray[datatype] # For bulk-read
+async def write_<dataname>_async(self, datatype)
+async def write_<dataname>_async(self, np.ndarray[datatype])  # For bulk-write
 ```
 
 异步接口需 `await`；等待期间不阻塞线程/事件循环，返回时保证读/写已经成功。
@@ -189,8 +189,8 @@ async def write_<dataname>_async(self, np.array<datatype>)  # For bulk-write
 ```python
 def read_<dataname>_unchecked(self) -> None
 def read_<dataname>_unchecked(self) -> None               # For bulk-read
-def write_<dataname>_unchecked(self, np.<datatype>)
-def write_<dataname>_unchecked(self, np.array<datatype>)  # For bulk-write
+def write_<dataname>_unchecked(self, datatype)
+def write_<dataname>_unchecked(self, np.ndarray[datatype])  # For bulk-write
 ```
 
 Unchecked 函数总是立即返回，不会阻塞，通常用于对实时性要求较高的场景。
@@ -200,33 +200,33 @@ Unchecked 函数总是立即返回，不会阻塞，通常用于对实时性要�
 如果希望获取以往读/写的结果，可以使用 `get` 系列函数：
 
 ```python
-def get_<dataname>(self) -> np.<datatype>
-def get_<dataname>(self) -> np.array<datatype> # For bulk-read
+def get_<dataname>(self) -> datatype
+def get_<dataname>(self) -> np.ndarray[datatype] # For bulk-read
 ```
 
 `get` 系列函数同样不会阻塞，它总是立即返回最近一次读取到的数据，无论该数据来自 `read`、`async-read` 还是 `read-unchecked`。 
 
 如果尚未请求过该数据，或请求尚未成功，`get` 函数的返回值是未定义的（通常为0）。
 
-### PDO 写
+### 实时控制
 
-默认的读/写方式均带有缓冲池，积攒一段数据后才进行传输，最高读/写频率无法超过 100Hz。
+默认的读/写方式均带有缓冲池，积攒一段时间数据后才进行传输，最高读/写频率无法超过 100Hz。
 
-对于需要高频率实时控制关节位置（如 1kHz）的场景，需使用 PDO 非阻塞写接口。
+对于需要流畅控制关节位置的场景，需使用 realtime_controller。
 
-```python
-hand.pdo_write_unchecked(np.float64(0.8))
-# 或按 5x4 结构批量发送：
-# hand.pdo_write_unchecked(np.array([...], dtype=np.float64))
-```
+具体的控制示例可见 [example](example) 目录：
 
-PDO 启用前需特别配置，见 [example/4.pdo.py](example/4.pdo.py)。
+单向写：[realtime.py](example/4.realtime.py)
+
+双向读/写：[realtime_duplex.py](example/5.realtime_duplex.py)
 
 ## 性能与优化
 
 WujihandPy 在充分保证易用性的同时，尽可能优化了性能与效率。
 
 我们强烈建议优先使用批量读/写以最大限度地发挥性能。
+
+对于需要流畅控制关节位置的场景，请务必使用 realtime_controller。
 
 ## 许可证
 
