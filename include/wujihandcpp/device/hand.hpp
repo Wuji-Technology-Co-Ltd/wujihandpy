@@ -96,11 +96,12 @@ public:
 
         init_storage_info(mask);
 
-        write<data::joint::Enabled>(false);
         Latch latch;
+        write_async<data::joint::Enabled>(latch, false);
+        latch.try_wait();
         write_async<data::joint::ControlMode>(latch, 2);
         write_async<data::joint::CurrentLimit>(latch, 1000);
-        latch.wait();
+        latch.try_wait();
     };
 
     Finger finger_thumb() { return finger(0); }
