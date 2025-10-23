@@ -5,6 +5,7 @@
 #include <wujihandcpp/device/finger.hpp>
 #include <wujihandcpp/device/hand.hpp>
 #include <wujihandcpp/device/joint.hpp>
+#include <wujihandcpp/device/latch.hpp>
 
 #include "controller.hpp"
 #include "filter.hpp"
@@ -24,6 +25,16 @@ void register_py_interface(const std::string& name, py::class_<T>& py_class, Oth
 }
 
 PYBIND11_MODULE(_core, m) {
+    py::register_exception_translator([](std::exception_ptr p) {
+        if (!p)
+            return;
+        try {
+            std::rethrow_exception(p);
+        } catch (const wujihandcpp::device::TimeoutError& e) {
+            PyErr_SetString(PyExc_TimeoutError, e.what());
+        }
+    });
+
     py::class_<IController>(m, "IController")
         .def("__enter__", [](IController& self) -> IController& { return self; })
         .def(
