@@ -93,6 +93,8 @@ if(WIN32)
 elseif(UNIX)
     target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE /usr/include/libusb-1.0)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 endif()
 
 if(NOT MSVC)
@@ -136,7 +138,7 @@ if(BUILD_TESTING)
     add_executable(wujihandcpp_tests
         ${WUJIHANDCPP_TEST_SOURCES}
     )
-    target_link_libraries(wujihandcpp_tests PRIVATE gtest_main ${PROJECT_NAME})
+    target_link_libraries(wujihandcpp_tests PRIVATE gtest_main ${PROJECT_NAME} Threads::Threads)
     target_include_directories(wujihandcpp_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
     add_test(NAME wujihandcpp_tests COMMAND wujihandcpp_tests)
