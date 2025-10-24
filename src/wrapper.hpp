@@ -14,6 +14,8 @@
 #include <wujihandcpp/data/joint.hpp>
 #include <wujihandcpp/device/latch.hpp>
 
+#include "filter.hpp"
+
 namespace py = pybind11;
 
 template <typename T>
@@ -90,9 +92,9 @@ public:
     }
 
     template <typename Data>
-    void write(py::numpy_scalar<typename Data::ValueType> value) {
+    void write(typename Data::ValueType value) {
         py::gil_scoped_release release;
-        T::template write<Data>(value.value);
+        T::template write<Data>(value);
     }
 
     template <typename Data>
@@ -123,7 +125,7 @@ public:
     }
 
     template <typename Data>
-    py::object write_async(py::numpy_scalar<typename Data::ValueType> value) {
+    py::object write_async(typename Data::ValueType value) {
         auto context = new FutureContext{*this, data_count<Data>()};
         T::template write_async<Data>(
             [context]() {
@@ -133,7 +135,7 @@ public:
                     delete context;
                 }
             },
-            value.value);
+            value);
 
         return context->future;
     }
@@ -173,8 +175,8 @@ public:
     }
 
     template <typename Data>
-    void write_async_unchecked(py::numpy_scalar<typename Data::ValueType> value) {
-        T::template write_async_unchecked<Data>(value.value);
+    void write_async_unchecked(typename Data::ValueType value) {
+        T::template write_async_unchecked<Data>(value);
     }
 
     template <typename Data>
@@ -235,29 +237,9 @@ public:
         return py::array_t<ValueType>({5, 4}, buffer, free);
     }
 
-    void pdo_write_unchecked(py::numpy_scalar<double> value) {
-        double control_positions[5][4];
-        for (auto& finger : control_positions)
-            for (auto& joint : finger)
-                joint = value.value;
-
-        static std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - begin);
-
-        T::pdo_write_async_unchecked(control_positions, static_cast<uint32_t>(duration.count()));
-    }
-
-    void pdo_write_unchecked(const py::array_t<double>& array) {
-        if (array.ndim() != 2 || array.shape()[0] != 5 || array.shape()[1] != 4)
-            throw std::runtime_error("Array shape must be {5, 4}!");
-
-        static std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - begin);
-        auto control_positions = reinterpret_cast<const double (*)[5][4]>(array.request().ptr);
-
-        T::pdo_write_async_unchecked(*control_positions, static_cast<uint32_t>(duration.count()));
+    std::unique_ptr<IController>
+        realtime_controller(bool enable_upstream, const filter::IFilter& filter) {
+        return filter.create_controller(*this, enable_upstream);
     }
 
     template <typename Data>
@@ -266,7 +248,7 @@ public:
             py_class.def(("read_" + name).c_str(), &Wrapper::read<Data>);
             py_class.def(
                 ("read_" + name + "_async").c_str(), &Wrapper::read_async<Data>,
-                pybind11::keep_alive<0, 1>());
+                py::keep_alive<0, 1>());
             py_class.def(
                 ("read_" + name + "_unchecked").c_str(), &Wrapper::read_async_unchecked<Data>);
             py_class.def(("get_" + name).c_str(), &Wrapper::get<Data>);
@@ -274,16 +256,14 @@ public:
         if constexpr (Data::writable) {
             using V = Data::ValueType;
             py_class.def(
-                ("write_" + name).c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write<Data>), py::arg("value"));
+                ("write_" + name).c_str(), py::overload_cast<V>(&Wrapper::write<Data>),
+                py::arg("value"));
             py_class.def(
                 ("write_" + name + "_async").c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async<Data>),
-                py::arg("value"));
+                py::overload_cast<V>(&Wrapper::write_async<Data>), py::arg("value"));
             py_class.def(
                 ("write_" + name + "_unchecked").c_str(),
-                py::overload_cast<py::numpy_scalar<V>>(&Wrapper::write_async_unchecked<Data>),
-                py::arg("value"));
+                py::overload_cast<V>(&Wrapper::write_async_unchecked<Data>), py::arg("value"));
             if constexpr (!std::is_same_v<typename Data::Base, T>) {
                 py_class.def(
                     ("write_" + name).c_str(),
@@ -292,7 +272,7 @@ public:
                 py_class.def(
                     ("write_" + name + "_async").c_str(),
                     py::overload_cast<py::array_t<V>>(&Wrapper::write_async<Data>),
-                    py::arg("value_array"));
+                    py::arg("value_array"), py::keep_alive<0, 1>());
                 py_class.def(
                     ("write_" + name + "_unchecked").c_str(),
                     py::overload_cast<py::array_t<V>>(&Wrapper::write_async_unchecked<Data>),

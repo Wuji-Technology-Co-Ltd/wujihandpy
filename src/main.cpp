@@ -6,6 +6,8 @@
 #include <wujihandcpp/device/hand.hpp>
 #include <wujihandcpp/device/joint.hpp>
 
+#include "controller.hpp"
+#include "filter.hpp"
 #include "wrapper.hpp"
 
 namespace py = pybind11;
@@ -22,6 +24,19 @@ void register_py_interface(const std::string& name, py::class_<T>& py_class, Oth
 }
 
 PYBIND11_MODULE(_core, m) {
+    py::class_<IController>(m, "IController")
+        .def("__enter__", [](IController& self) -> IController& { return self; })
+        .def(
+            "__exit__", [](IController& self, const py::object&, const py::object&,
+                           const py::object&) { self.close(); })
+        .def("close", &IController::close)
+        .def("get_joint_actual_position", &IController::get_joint_actual_position)
+        .def(
+            "set_joint_target_position", &IController::set_joint_target_position,
+            py::arg("value_array"));
+
+    filter::init_module(m);
+
     using namespace wujihandcpp;
 
     using Hand = Wrapper<wujihandcpp::device::Hand>;
@@ -37,24 +52,18 @@ PYBIND11_MODULE(_core, m) {
     register_py_interface<data::hand::SystemTime>("system_time", hand);
     register_py_interface<data::hand::Temperature>("temperature", hand);
     register_py_interface<data::hand::InputVoltage>("input_voltage", hand);
-    register_py_interface<data::hand::PdoEnabled>("pdo_enabled", hand);
-    register_py_interface<data::hand::GlobalTpdoId>("global_tpdo_id", hand);
-    register_py_interface<data::hand::JointPdoInterval>("pdo_interval", hand);
 
     hand.def(
-        "pdo_write_unchecked",
-        py::overload_cast<py::numpy_scalar<double>>(&Hand::pdo_write_unchecked));
-    hand.def(
-        "pdo_write_unchecked",
-        py::overload_cast<const py::array_t<double>&>(&Hand::pdo_write_unchecked));
+        "realtime_controller", &Hand::realtime_controller, py::arg("enable_upstream"),
+        py::arg("filter"), py::keep_alive<0, 1>());
 
     using Finger = Wrapper<wujihandcpp::device::Finger>;
     auto finger = py::class_<Finger>(m, "Finger");
-    hand.def("finger", &Hand::finger, py::arg("index"));
+    hand.def("finger", &Hand::finger, py::arg("index"), py::keep_alive<0, 1>());
 
     using Joint = Wrapper<wujihandcpp::device::Joint>;
     auto joint = py::class_<Joint>(m, "Joint");
-    finger.def("joint", &Finger::joint, py::arg("index"));
+    finger.def("joint", &Finger::joint, py::arg("index"), py::keep_alive<0, 1>());
 
     register_py_interface<data::joint::HardwareVersion>("hardware_version", hand, finger, joint);
     register_py_interface<data::joint::HardwareDate>("hardware_date", hand, finger, joint);
@@ -65,9 +74,9 @@ PYBIND11_MODULE(_core, m) {
     register_py_interface<data::joint::Temperature>("temperature", hand, finger, joint);
     register_py_interface<data::joint::ResetError>("reset_error", hand, finger, joint);
     register_py_interface<data::joint::ErrorCode>("error_code", hand, finger, joint);
-    register_py_interface<data::joint::ControlWord>("control_word", hand, finger, joint);
-    register_py_interface<data::joint::Position>("position", hand, finger, joint);
-    register_py_interface<data::joint::ControlPosition>("control_position", hand, finger, joint);
+    register_py_interface<data::joint::Enabled>("enabled", hand, finger, joint);
+    register_py_interface<data::joint::ActualPosition>("actual_position", hand, finger, joint);
+    register_py_interface<data::joint::TargetPosition>("target_position", hand, finger, joint);
     register_py_interface<data::joint::UpperLimit>("upper_limit", hand, finger, joint);
     register_py_interface<data::joint::LowerLimit>("lower_limit", hand, finger, joint);
 }

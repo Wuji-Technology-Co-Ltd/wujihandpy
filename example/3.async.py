@@ -10,18 +10,15 @@ async def main():
         await run(hand)
     finally:
         # Disable the entire hand
-        await hand.write_joint_control_word_async(np.uint16(5))
+        await hand.write_joint_enabled_async(False)
 
 
 async def run(hand: wujihandpy.Hand):
-    # Set control mode (PP)
-    await hand.write_joint_control_mode_async(np.uint16(2))
-
     # Enable all joints
-    await hand.write_joint_control_word_async(np.uint16(1))
+    await hand.write_joint_enabled_async(True)
 
     # Return all joints to initial point
-    await hand.write_joint_control_position_async(
+    await hand.write_joint_target_position_async(
         np.array(
             [
                 # J1    J2    J3    J4
@@ -39,17 +36,17 @@ async def run(hand: wujihandpy.Hand):
     await asyncio.sleep(0.5)
 
     # Disable unnecessary joints
-    await hand.write_joint_control_word_async(
+    await hand.write_joint_enabled_async(
         np.array(
             [
                 # J1J2 J3J4
-                [5, 5, 5, 5],  # F1
-                [1, 5, 1, 1],  # F2
-                [1, 5, 1, 1],  # F3
-                [5, 5, 5, 5],  # F4
-                [5, 5, 5, 5],  # F5
+                [0, 0, 0, 0],  # F1
+                [1, 0, 1, 1],  # F2
+                [1, 0, 1, 1],  # F3
+                [0, 0, 0, 0],  # F4
+                [0, 0, 0, 0],  # F5
             ],
-            dtype=np.uint16,
+            dtype=bool,
         )
     )
 
@@ -65,7 +62,7 @@ async def shake(x: float, finger: wujihandpy.Finger):
         y = (1 - math.cos(x)) * 0.8
 
         # Control middle finger
-        await finger.write_joint_control_position_async(
+        await finger.write_joint_target_position_async(
             np.array(
                 # J1J2 J3J4
                 [y, 0, y, y],
