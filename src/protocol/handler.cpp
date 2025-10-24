@@ -453,10 +453,12 @@ private:
                 if (storage.info.policy & Handler::StorageInfo::MASKED)
                     operation.state = Operation::State::SUCCESS;
                 if (operation.state == Operation::State::SUCCESS) {
+                    auto callback = storage.callback;
+                    auto context = storage.callback_context;
                     operation.mode = Operation::Mode::NONE;
-                    storage.operation.store(operation, std::memory_order::relaxed);
-                    if (storage.callback)
-                        storage.callback(storage.callback_context, true);
+                    storage.operation.store(operation, std::memory_order::release);
+                    if (callback)
+                        callback(context, true);
                 }
 
                 if (operation.state == Operation::State::WAITING) {
@@ -472,10 +474,12 @@ private:
                                                                  : Operation::State::WRITING);
                     storage.operation.store(operation, std::memory_order::relaxed);
                 } else if (now >= storage.timeout_point) {
+                    auto callback = storage.callback;
+                    auto context = storage.callback_context;
                     operation.mode = Operation::Mode::NONE;
-                    storage.operation.store(operation, std::memory_order::relaxed);
-                    if (storage.callback)
-                        storage.callback(storage.callback_context, false);
+                    storage.operation.store(operation, std::memory_order::release);
+                    if (callback)
+                        callback(context, false);
                 } else if (
                     operation.state == Operation::State::READING
                     || operation.state == Operation::State::WRITING_CONFIRMING) {

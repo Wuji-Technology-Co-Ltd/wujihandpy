@@ -96,12 +96,15 @@ public:
 
         init_storage_info(mask);
 
-        Latch latch;
-        write_async<data::joint::Enabled>(latch, false);
-        latch.try_wait();
-        write_async<data::joint::ControlMode>(latch, 2);
-        write_async<data::joint::CurrentLimit>(latch, 1000);
-        latch.try_wait();
+        try {
+            write<data::joint::Enabled>(false);
+            Latch latch;
+            write_async<data::joint::ControlMode>(latch, 2);
+            write_async<data::joint::CurrentLimit>(latch, 1000);
+            latch.wait();
+        } catch (const TimeoutError&) {
+            throw TimeoutError("Hand initialization timed out: joint configuration incomplete");
+        }
     };
 
     Finger finger_thumb() { return finger(0); }
