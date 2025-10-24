@@ -46,7 +46,7 @@ def run(hand: wujihandpy.Hand):
                 [0, 0, 0, 0],  # F4
                 [0, 0, 0, 0],  # F5
             ],
-            dtype=np.bool,
+            dtype=bool,
         )
     )
 

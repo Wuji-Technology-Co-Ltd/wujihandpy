@@ -1,5 +1,6 @@
 import pybind11_stubgen
 import re
+import typing
 
 
 def main():
@@ -14,7 +15,7 @@ def post_process_async_function():
 
     sections = content.split("class")
     for i in range(len(sections)):
-        return_type_dict = {}
+        return_type_dict: typing.Dict[str, str] = {}
         matches = re.finditer(r"def (read|write)_(\S+?)\(.+?\) -> (\S+?):", sections[i])
         for match in matches:
             groups = match.groups()
@@ -29,6 +30,9 @@ def post_process_async_function():
             )
 
     content = "class".join(sections)
+
+    content = re.sub(r"\bnumpy\.bool\b", "numpy.bool_", content)
+
     with open("src/wujihandpy/_core/__init__.pyi", "w") as file:
         file.write(content)
 

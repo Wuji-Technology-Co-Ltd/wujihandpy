@@ -29,6 +29,7 @@ PYBIND11_MODULE(_core, m) {
         .def(
             "__exit__", [](IController& self, const py::object&, const py::object&,
                            const py::object&) { self.close(); })
+        .def("close", &IController::close)
         .def("get_joint_actual_position", &IController::get_joint_actual_position)
         .def(
             "set_joint_target_position", &IController::set_joint_target_position,

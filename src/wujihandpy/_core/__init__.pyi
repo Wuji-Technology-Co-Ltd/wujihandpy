@@ -111,19 +111,19 @@ class Finger:
     def write_joint_enabled(self, value: bool) -> None:
         ...
     @typing.overload
-    def write_joint_enabled(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool]) -> None:
+    def write_joint_enabled(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_]) -> None:
         ...
     @typing.overload
     async def write_joint_enabled_async(self, value: bool) -> None:
         ...
     @typing.overload
-    async def write_joint_enabled_async(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool]) -> None:
+    async def write_joint_enabled_async(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_]) -> None:
         ...
     @typing.overload
     def write_joint_enabled_unchecked(self, value: bool) -> None:
         ...
     @typing.overload
-    def write_joint_enabled_unchecked(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool]) -> None:
+    def write_joint_enabled_unchecked(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_]) -> None:
         ...
     @typing.overload
     def write_joint_reset_error(self, value: typing.SupportsInt) -> None:
@@ -180,7 +180,7 @@ class Finger:
     def write_joint_target_position_unchecked(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.float64]) -> None:
         ...
 class Hand:
-    def __init__(self, serial_number: str | None = None, usb_pid: typing.SupportsInt = -1, usb_vid: typing.SupportsInt = 1155, mask: typing.Annotated[numpy.typing.ArrayLike, numpy.bool] | None = None) -> None:
+    def __init__(self, serial_number: str | None = None, usb_pid: typing.SupportsInt = -1, usb_vid: typing.SupportsInt = 1155, mask: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_] | None = None) -> None:
         ...
     def finger(self, index: typing.SupportsInt) -> Finger:
         ...
@@ -338,19 +338,19 @@ class Hand:
     def write_joint_enabled(self, value: bool) -> None:
         ...
     @typing.overload
-    def write_joint_enabled(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool]) -> None:
+    def write_joint_enabled(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_]) -> None:
         ...
     @typing.overload
     async def write_joint_enabled_async(self, value: bool) -> None:
         ...
     @typing.overload
-    async def write_joint_enabled_async(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool]) -> None:
+    async def write_joint_enabled_async(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_]) -> None:
         ...
     @typing.overload
     def write_joint_enabled_unchecked(self, value: bool) -> None:
         ...
     @typing.overload
-    def write_joint_enabled_unchecked(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool]) -> None:
+    def write_joint_enabled_unchecked(self, value_array: typing.Annotated[numpy.typing.ArrayLike, numpy.bool_]) -> None:
         ...
     @typing.overload
     def write_joint_reset_error(self, value: typing.SupportsInt) -> None:
@@ -410,6 +410,8 @@ class IController:
     def __enter__(self) -> IController:
         ...
     def __exit__(self, arg0: typing.Any, arg1: typing.Any, arg2: typing.Any) -> None:
+        ...
+    def close(self) -> None:
         ...
     def get_joint_actual_position(self) -> numpy.typing.NDArray[numpy.float64]:
         ...

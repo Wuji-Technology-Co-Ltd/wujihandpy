@@ -1,6 +1,10 @@
 #pragma once
 
+#include <memory>
 #include <optional>
+#include <stdexcept>
+#include <utility>
+#include <atomic>
 
 #include <pybind11/numpy.h>
 #include <wujihandcpp/device/hand.hpp>
