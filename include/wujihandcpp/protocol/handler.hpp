@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <chrono>
 #include <type_traits>
 
 #include "wujihandcpp/device/controller.hpp"
@@ -13,7 +14,6 @@ namespace wujihandcpp {
 namespace protocol {
 
 class Handler final {
-
 public:
     struct StorageInfo {
         StorageInfo() = default;
@@ -77,16 +77,19 @@ public:
 
     WUJIHANDCPP_API void init_storage_info(int storage_id, StorageInfo info);
 
-    WUJIHANDCPP_API void read_async_unchecked(int storage_id);
+    WUJIHANDCPP_API void
+        read_async_unchecked(int storage_id, std::chrono::steady_clock::duration::rep timeout);
 
     WUJIHANDCPP_API void read_async(
-        int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context);
+        int storage_id, std::chrono::steady_clock::duration::rep timeout,
+        void (*callback)(Buffer8 context, bool success), Buffer8 callback_context);
 
-    WUJIHANDCPP_API void write_async_unchecked(Buffer8 data, int storage_id);
+    WUJIHANDCPP_API void write_async_unchecked(
+        Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout);
 
     WUJIHANDCPP_API void write_async(
-        Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
-        Buffer8 callback_context);
+        Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,
+        void (*callback)(Buffer8 context, bool success), Buffer8 callback_context);
 
     WUJIHANDCPP_API void
         attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream);

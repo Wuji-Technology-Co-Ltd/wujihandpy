@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.24)
 
 project(wujihandcpp LANGUAGES C CXX)
 
@@ -93,6 +93,8 @@ if(WIN32)
 elseif(UNIX)
     target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE /usr/include/libusb-1.0)
     target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 endif()
 
 if(NOT MSVC)
@@ -117,6 +119,30 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
+
+include(CTest)
+if(BUILD_TESTING)
+    include(FetchContent)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(googletest)
+
+    file(GLOB_RECURSE WUJIHANDCPP_TEST_SOURCES CONFIGURE_DEPENDS
+        ${PROJECT_SOURCE_DIR}/tests/*.cpp
+    )
+
+    add_executable(wujihandcpp_tests
+        ${WUJIHANDCPP_TEST_SOURCES}
+    )
+    target_link_libraries(wujihandcpp_tests PRIVATE gtest_main ${PROJECT_NAME} Threads::Threads)
+    target_include_directories(wujihandcpp_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+    add_test(NAME wujihandcpp_tests COMMAND wujihandcpp_tests)
+endif()
 
 if(UNIX AND NOT APPLE)
     set(CPACK_GENERATOR "DEB;RPM")

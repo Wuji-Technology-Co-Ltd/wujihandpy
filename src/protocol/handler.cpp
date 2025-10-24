@@ -49,36 +49,39 @@ public:
         index_storage_map_[std::bit_cast<uint32_t>(index)] = &storage_[storage_id];
     }
 
-    void read_async_unchecked(int storage_id) {
+    void read_async_unchecked(int storage_id, std::chrono::steady_clock::duration::rep timeout) {
         operation_thread_check();
 
         if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
             != Operation::Mode::NONE)
             return;
 
+        storage_[storage_id].timeout = std::chrono::steady_clock::duration(timeout);
         storage_[storage_id].callback = nullptr;
         storage_[storage_id].operation.store(
-            Operation{.mode = Operation::Mode::READ, .state = Operation::State::READING},
+            Operation{.mode = Operation::Mode::READ, .state = Operation::State::WAITING},
             std::memory_order::release);
     }
 
     void read_async(
-        int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
-        Buffer8 callback_context) {
+        int storage_id, std::chrono::steady_clock::duration::rep timeout,
+        void (*callback)(Buffer8 context, bool success), Buffer8 callback_context) {
         operation_thread_check();
 
         if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
             != Operation::Mode::NONE) [[unlikely]]
             throw std::runtime_error("Illegal checked read: Data is being operated!");
 
+        storage_[storage_id].timeout = std::chrono::steady_clock::duration(timeout);
         storage_[storage_id].callback = callback;
         storage_[storage_id].callback_context = callback_context;
         storage_[storage_id].operation.store(
-            Operation{.mode = Operation::Mode::READ, .state = Operation::State::READING},
+            Operation{.mode = Operation::Mode::READ, .state = Operation::State::WAITING},
             std::memory_order::release);
     }
 
-    void write_async_unchecked(Buffer8 data, int storage_id) {
+    void write_async_unchecked(
+        Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout) {
         operation_thread_check();
 
         store_data(storage_[storage_id], data);
@@ -87,15 +90,16 @@ public:
             != Operation::Mode::NONE)
             return;
 
+        storage_[storage_id].timeout = std::chrono::steady_clock::duration(timeout);
         storage_[storage_id].callback = nullptr;
         storage_[storage_id].operation.store(
-            Operation{.mode = Operation::Mode::WRITE, .state = Operation::State::WRITING},
+            Operation{.mode = Operation::Mode::WRITE, .state = Operation::State::WAITING},
             std::memory_order::release);
     }
 
     void write_async(
-        Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
-        Buffer8 callback_context) {
+        Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,
+        void (*callback)(Buffer8 context, bool success), Buffer8 callback_context) {
         operation_thread_check();
 
         if (storage_[storage_id].operation.load(std::memory_order::relaxed).mode
@@ -103,10 +107,11 @@ public:
             throw std::runtime_error("Illegal checked write: Data is being operated!");
 
         store_data(storage_[storage_id], data);
+        storage_[storage_id].timeout = std::chrono::steady_clock::duration(timeout);
         storage_[storage_id].callback = callback;
         storage_[storage_id].callback_context = callback_context;
         storage_[storage_id].operation.store(
-            Operation{.mode = Operation::Mode::WRITE, .state = Operation::State::WRITING},
+            Operation{.mode = Operation::Mode::WRITE, .state = Operation::State::WAITING},
             std::memory_order::release);
     }
 
@@ -147,28 +152,40 @@ private:
         enum class State : uint16_t {
             SUCCESS = 0,
 
+            WAITING,
+
             READING,
 
             WRITING,
             WRITING_CONFIRMING,
         } state;
     };
-    struct StorageUnit {
+    struct alignas(64) StorageUnit {
+        constexpr StorageUnit()
+            : version(0) {};
+
         StorageInfo info;
 
         std::atomic<Operation> operation =
             Operation{.mode = Operation::Mode::NONE, .state = Operation::State::SUCCESS};
+        static_assert(decltype(StorageUnit::operation)::is_always_lock_free);
 
-        std::atomic<uint32_t> version = 0;
+        std::atomic<uint32_t> version;
         std::atomic<Buffer8> value;
+        static_assert(decltype(StorageUnit::version)::is_always_lock_free);
+        static_assert(decltype(StorageUnit::value)::is_always_lock_free);
 
-        void (*callback)(Buffer8 context, Buffer8 value);
+        union {
+            std::chrono::steady_clock::duration timeout;
+            std::chrono::steady_clock::time_point timeout_point;
+            static_assert(std::is_trivially_destructible_v<decltype(timeout)>);
+            static_assert(std::is_trivially_destructible_v<decltype(timeout_point)>);
+        };
+
+        void (*callback)(Buffer8 context, bool success);
         Buffer8 callback_context;
     };
-    static_assert(sizeof(StorageUnit) == 40);
-    static_assert(decltype(StorageUnit::operation)::is_always_lock_free);
-    static_assert(decltype(StorageUnit::version)::is_always_lock_free);
-    static_assert(decltype(StorageUnit::value)::is_always_lock_free);
+    static_assert(sizeof(StorageUnit) == 64);
 
     void operation_thread_check() const {
         if (operation_thread_id_ == std::thread::id{})
@@ -424,6 +441,8 @@ private:
                 std::chrono::duration<double>(1.0 / update_rate));
 
         while (!token.stop_requested()) {
+            auto now = std::chrono::steady_clock::now();
+
             for (size_t i = 0; i < storage_unit_count_; i++) {
                 auto& storage = storage_[i];
 
@@ -434,12 +453,33 @@ private:
                 if (storage.info.policy & Handler::StorageInfo::MASKED)
                     operation.state = Operation::State::SUCCESS;
                 if (operation.state == Operation::State::SUCCESS) {
+                    auto callback = storage.callback;
+                    auto context = storage.callback_context;
                     operation.mode = Operation::Mode::NONE;
+                    storage.operation.store(operation, std::memory_order::release);
+                    if (callback)
+                        callback(context, true);
+                }
+
+                if (operation.state == Operation::State::WAITING) {
+                    if (storage.timeout < std::chrono::steady_clock::duration::zero()
+                        || now > std::chrono::steady_clock::time_point::max() - storage.timeout)
+                        // Treat negative or overflowed timeout as never expires
+                        storage.timeout_point = std::chrono::steady_clock::time_point::max();
+                    else
+                        storage.timeout_point = now + storage.timeout;
+
+                    operation.state =
+                        (operation.mode == Operation::Mode::READ ? Operation::State::READING
+                                                                 : Operation::State::WRITING);
                     storage.operation.store(operation, std::memory_order::relaxed);
-                    if (storage.callback)
-                        storage.callback(
-                            storage.callback_context,
-                            storage.value.load(std::memory_order::relaxed));
+                } else if (now >= storage.timeout_point) {
+                    auto callback = storage.callback;
+                    auto context = storage.callback_context;
+                    operation.mode = Operation::Mode::NONE;
+                    storage.operation.store(operation, std::memory_order::release);
+                    if (callback)
+                        callback(context, false);
                 } else if (
                     operation.state == Operation::State::READING
                     || operation.state == Operation::State::WRITING_CONFIRMING) {
@@ -647,23 +687,26 @@ WUJIHANDCPP_API void Handler::init_storage_info(int storage_id, StorageInfo info
     impl_->init_storage_info(storage_id, info);
 }
 
-WUJIHANDCPP_API void Handler::read_async_unchecked(int storage_id) {
-    impl_->read_async_unchecked(storage_id);
+WUJIHANDCPP_API void Handler::read_async_unchecked(
+    int storage_id, std::chrono::steady_clock::duration::rep timeout) {
+    impl_->read_async_unchecked(storage_id, timeout);
 }
 
 WUJIHANDCPP_API void Handler::read_async(
-    int storage_id, void (*callback)(Buffer8 context, Buffer8 value), Buffer8 callback_context) {
-    impl_->read_async(storage_id, callback, callback_context);
+    int storage_id, std::chrono::steady_clock::duration::rep timeout,
+    void (*callback)(Buffer8 context, bool success), Buffer8 callback_context) {
+    impl_->read_async(storage_id, timeout, callback, callback_context);
 }
 
-WUJIHANDCPP_API void Handler::write_async_unchecked(Buffer8 data, int storage_id) {
-    impl_->write_async_unchecked(data, storage_id);
+WUJIHANDCPP_API void Handler::write_async_unchecked(
+    Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout) {
+    impl_->write_async_unchecked(data, storage_id, timeout);
 }
 
 WUJIHANDCPP_API void Handler::write_async(
-    Buffer8 data, int storage_id, void (*callback)(Buffer8 context, Buffer8 value),
-    Buffer8 callback_context) {
-    impl_->write_async(data, storage_id, callback, callback_context);
+    Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,
+    void (*callback)(Buffer8 context, bool success), Buffer8 callback_context) {
+    impl_->write_async(data, storage_id, timeout, callback, callback_context);
 }
 
 WUJIHANDCPP_API void Handler::attach_realtime_controller(
