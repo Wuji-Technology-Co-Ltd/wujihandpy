@@ -1,7 +1,11 @@
 #pragma once
 
+#include <cmath>
+
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <format>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
@@ -56,49 +60,63 @@ public:
         return std::make_unique<Wrapper<wujihandcpp::device::Joint>>(T::joint(index));
     }
 
-    template <typename Data>
-    requires(std::is_same_v<typename Data::Base, T>) auto read() {
-        py::gil_scoped_release release;
-        return py::numpy_scalar{T::template read<Data>()};
+    static constexpr double default_timeout = 0.5;
+
+    constexpr std::chrono::steady_clock::duration seconds_to_duration(double seconds) {
+        using duration_t = std::chrono::steady_clock::duration;
+
+        if (std::isnan(seconds))
+            return duration_t::max();
+
+        constexpr double max_seconds =
+            std::chrono::duration_cast<std::chrono::duration<double>>(duration_t::max()).count();
+        constexpr double min_seconds =
+            std::chrono::duration_cast<std::chrono::duration<double>>(duration_t::min()).count();
+        seconds = std::clamp(seconds, min_seconds, max_seconds);
+
+        return std::chrono::duration_cast<duration_t>(std::chrono::duration<double>(seconds));
     }
 
     template <typename Data>
-    requires(!std::is_same_v<typename Data::Base, T>) auto read() {
+    requires(std::is_same_v<typename Data::Base, T>) auto read(double timeout) {
+        py::gil_scoped_release release;
+        return py::numpy_scalar{T::template read<Data>(seconds_to_duration(timeout))};
+    }
+
+    template <typename Data>
+    requires(!std::is_same_v<typename Data::Base, T>) auto read(double timeout) {
         {
             py::gil_scoped_release release;
-            T::template read<Data>();
+            T::template read<Data>(seconds_to_duration(timeout));
         }
         return get<Data>();
     }
 
     template <typename Data>
-    py::object read_async() {
-        auto context = new FutureContext{*this, data_count<Data>()};
-        T::template read_async<Data>([context](Data::ValueType) {
-            if (context->count_down()) {
-                py::gil_scoped_acquire acquire;
-                context->call_threadsafe(
-                    context->future.attr("set_result"), context->hand.template get<Data>());
-                delete context;
-            }
-        });
+    py::object read_async(double timeout) {
+        FutureLatch* latch = FutureLatch::create(*this, data_count<Data>());
+        T::template read_async<Data>(
+            [latch](bool success) {
+                latch->count_down(success, [](Wrapper& wrapper) { return wrapper.get<Data>(); });
+            },
+            seconds_to_duration(timeout));
 
-        return context->future;
+        return latch->future();
     }
 
     template <typename Data>
-    void read_async_unchecked() {
-        T::template read_async_unchecked<Data>();
+    void read_async_unchecked(double timeout) {
+        T::template read_async_unchecked<Data>(seconds_to_duration(timeout));
     }
 
     template <typename Data>
-    void write(typename Data::ValueType value) {
+    void write(typename Data::ValueType value, double timeout) {
         py::gil_scoped_release release;
-        T::template write<Data>(value);
+        T::template write<Data>(value, seconds_to_duration(timeout));
     }
 
     template <typename Data>
-    void write(py::array_t<typename Data::ValueType> array) {
+    void write(py::array_t<typename Data::ValueType> array, double timeout) {
         py::gil_scoped_release release;
         wujihandcpp::device::Latch latch;
 
@@ -109,7 +127,7 @@ public:
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (int j = 0; j < 4; j++)
-                T::joint(j).template write_async<Data>(latch, r(j));
+                T::joint(j).template write_async<Data>(latch, r(j), seconds_to_duration(timeout));
         } else if constexpr (
             std::is_same_v<T, wujihandcpp::device::Hand>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
@@ -118,38 +136,30 @@ public:
             auto r = array.template unchecked<2>();
             for (int i = 0; i < 5; i++)
                 for (int j = 0; j < 4; j++)
-                    T::finger(i).joint(j).template write_async<Data>(latch, r(i, j));
+                    T::finger(i).joint(j).template write_async<Data>(
+                        latch, r(i, j), seconds_to_duration(timeout));
         }
 
         latch.wait();
     }
 
     template <typename Data>
-    py::object write_async(typename Data::ValueType value) {
-        auto context = new FutureContext{*this, data_count<Data>()};
+    py::object write_async(typename Data::ValueType value, double timeout) {
+        FutureLatch* latch = FutureLatch::create(*this, data_count<Data>());
         T::template write_async<Data>(
-            [context]() {
-                if (context->count_down()) {
-                    py::gil_scoped_acquire acquire;
-                    context->call_threadsafe(context->future.attr("set_result"), py::none());
-                    delete context;
-                }
+            [latch](bool success) {
+                latch->count_down(success, [](Wrapper&) { return py::none(); });
             },
-            value);
+            value, seconds_to_duration(timeout));
 
-        return context->future;
+        return latch->future();
     }
 
     template <typename Data>
-    py::object write_async(py::array_t<typename Data::ValueType> array) {
-        auto context = new FutureContext{*this, data_count<Data>()};
-
-        auto callback = [context]() {
-            if (context->count_down()) {
-                py::gil_scoped_acquire acquire;
-                context->call_threadsafe(context->future.attr("set_result"), py::none());
-                delete context;
-            }
+    py::object write_async(py::array_t<typename Data::ValueType> array, double timeout) {
+        FutureLatch* latch = FutureLatch::create(*this, data_count<Data>());
+        auto callback = [latch](bool success) {
+            latch->count_down(success, [](Wrapper&) { return py::none(); });
         };
 
         if constexpr (
@@ -159,7 +169,8 @@ public:
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (int j = 0; j < 4; j++)
-                T::joint(j).template write_async<Data>(callback, r(j));
+                T::joint(j).template write_async<Data>(
+                    callback, r(j), seconds_to_duration(timeout));
         } else if constexpr (
             std::is_same_v<T, wujihandcpp::device::Hand>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
@@ -168,19 +179,20 @@ public:
             auto r = array.template unchecked<2>();
             for (int i = 0; i < 5; i++)
                 for (int j = 0; j < 4; j++)
-                    T::finger(i).joint(j).template write_async<Data>(callback, r(i, j));
+                    T::finger(i).joint(j).template write_async<Data>(
+                        callback, r(i, j), seconds_to_duration(timeout));
         }
 
-        return context->future;
+        return latch->future();
     }
 
     template <typename Data>
-    void write_async_unchecked(typename Data::ValueType value) {
-        T::template write_async_unchecked<Data>(value);
+    void write_async_unchecked(typename Data::ValueType value, double timeout) {
+        T::template write_async_unchecked<Data>(value, seconds_to_duration(timeout));
     }
 
     template <typename Data>
-    void write_async_unchecked(py::array_t<typename Data::ValueType> array) {
+    void write_async_unchecked(py::array_t<typename Data::ValueType> array, double timeout) {
         if constexpr (
             std::is_same_v<T, wujihandcpp::device::Finger>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
@@ -188,7 +200,8 @@ public:
                 throw std::runtime_error("Array shape must be {4}!");
             auto r = array.template unchecked<1>();
             for (int j = 0; j < 4; j++)
-                T::joint(j).template write_async_unchecked<Data>(r(j));
+                T::joint(j).template write_async_unchecked<Data>(
+                    r(j), seconds_to_duration(timeout));
         } else if constexpr (
             std::is_same_v<T, wujihandcpp::device::Hand>
             && std::is_same_v<typename Data::Base, wujihandcpp::device::Joint>) {
@@ -197,7 +210,8 @@ public:
             auto r = array.template unchecked<2>();
             for (int i = 0; i < 5; i++)
                 for (int j = 0; j < 4; j++)
-                    T::finger(i).joint(j).template write_async_unchecked<Data>(r(i, j));
+                    T::finger(i).joint(j).template write_async_unchecked<Data>(
+                        r(i, j), seconds_to_duration(timeout));
         }
     }
 
@@ -245,63 +259,101 @@ public:
     template <typename Data>
     static void register_py_interface(py::class_<Wrapper>& py_class, const std::string& name) {
         if constexpr (Data::readable) {
-            py_class.def(("read_" + name).c_str(), &Wrapper::read<Data>);
+            py_class.def(("read_" + name).c_str(), &Wrapper::read<Data>, py::arg("timeout") = 0.5);
             py_class.def(
                 ("read_" + name + "_async").c_str(), &Wrapper::read_async<Data>,
-                py::keep_alive<0, 1>());
+                py::arg("timeout") = 0.5, py::keep_alive<0, 1>());
             py_class.def(
-                ("read_" + name + "_unchecked").c_str(), &Wrapper::read_async_unchecked<Data>);
+                ("read_" + name + "_unchecked").c_str(), &Wrapper::read_async_unchecked<Data>,
+                py::arg("timeout") = 0.5);
             py_class.def(("get_" + name).c_str(), &Wrapper::get<Data>);
         }
         if constexpr (Data::writable) {
             using V = Data::ValueType;
             py_class.def(
-                ("write_" + name).c_str(), py::overload_cast<V>(&Wrapper::write<Data>),
-                py::arg("value"));
+                ("write_" + name).c_str(), py::overload_cast<V, double>(&Wrapper::write<Data>),
+                py::arg("value"), py::arg("timeout") = 0.5);
             py_class.def(
                 ("write_" + name + "_async").c_str(),
-                py::overload_cast<V>(&Wrapper::write_async<Data>), py::arg("value"));
+                py::overload_cast<V, double>(&Wrapper::write_async<Data>), py::arg("value"),
+                py::arg("timeout") = 0.5);
             py_class.def(
                 ("write_" + name + "_unchecked").c_str(),
-                py::overload_cast<V>(&Wrapper::write_async_unchecked<Data>), py::arg("value"));
+                py::overload_cast<V, double>(&Wrapper::write_async_unchecked<Data>),
+                py::arg("value"), py::arg("timeout") = 0.5);
             if constexpr (!std::is_same_v<typename Data::Base, T>) {
                 py_class.def(
                     ("write_" + name).c_str(),
-                    py::overload_cast<py::array_t<V>>(&Wrapper::write<Data>),
-                    py::arg("value_array"));
+                    py::overload_cast<py::array_t<V>, double>(&Wrapper::write<Data>),
+                    py::arg("value_array"), py::arg("timeout") = 0.5);
                 py_class.def(
                     ("write_" + name + "_async").c_str(),
-                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async<Data>),
-                    py::arg("value_array"), py::keep_alive<0, 1>());
+                    py::overload_cast<py::array_t<V>, double>(&Wrapper::write_async<Data>),
+                    py::arg("value_array"), py::arg("timeout") = 0.5, py::keep_alive<0, 1>());
                 py_class.def(
                     ("write_" + name + "_unchecked").c_str(),
-                    py::overload_cast<py::array_t<V>>(&Wrapper::write_async_unchecked<Data>),
-                    py::arg("value_array"));
+                    py::overload_cast<py::array_t<V>, double>(
+                        &Wrapper::write_async_unchecked<Data>),
+                    py::arg("value_array"), py::arg("timeout") = 0.5);
             }
         }
     }
 
 private:
-    struct FutureContext {
-        explicit FutureContext(Wrapper& hand, int count)
-            : hand(hand)
-            , count(count) {
-            auto loop = py::module::import("asyncio").attr("get_event_loop")();
-            call_threadsafe = loop.attr("call_soon_threadsafe");
-            future = loop.attr("create_future")();
+    struct FutureLatch {
+        // Call with GIL
+        static FutureLatch* create(Wrapper& hand, int waiting_count) {
+            return new FutureLatch(hand, waiting_count);
         }
 
-        bool count_down() {
-            auto new_count = count.load(std::memory_order::relaxed) - 1;
-            count.store(new_count, std::memory_order::relaxed);
-            return new_count == 0;
+        // Call without GIL
+        template <typename F>
+        void count_down(bool success, const F& make_result) {
+            if (!success)
+                error_count_.fetch_add(1, std::memory_order_relaxed);
+
+            const int old = waiting_count_.fetch_sub(1, std::memory_order_acq_rel);
+            if (old == 1) {
+                // This is the last completion. Safely interact with Python.
+                py::gil_scoped_acquire acquire;
+                const int error_count = error_count_.load(std::memory_order_relaxed);
+                if (error_count) {
+                    py::object timeout_error_type =
+                        py::reinterpret_borrow<py::object>(PyExc_TimeoutError);
+                    call_threadsafe_(
+                        future_.attr("set_exception"),
+                        timeout_error_type(
+                            error_count == 1
+                                ? "Operation timed out while waiting for completion"
+                                : std::format(
+                                      "{} operations timed out while waiting for completion",
+                                      error_count)));
+                } else {
+                    call_threadsafe_(future_.attr("set_result"), make_result(wrapper));
+                }
+                delete this;
+            }
         }
 
-        Wrapper& hand;
-        std::atomic<int> count;
+        py::object& future() { return future_; }
 
-        py::object call_threadsafe;
-        py::object future;
+    private:
+        explicit FutureLatch(Wrapper& hand, int waiting_count)
+            : wrapper(hand)
+            , waiting_count_(waiting_count)
+            , error_count_(0) {
+            py::object loop = py::module::import("asyncio").attr("get_event_loop")();
+            future_ = loop.attr("create_future")();
+            call_threadsafe_ = loop.attr("call_soon_threadsafe");
+        }
+
+        Wrapper& wrapper;
+
+        py::object future_;
+        py::object call_threadsafe_;
+
+        std::atomic<int> waiting_count_;
+        std::atomic<int> error_count_;
     };
 
     template <typename Data>

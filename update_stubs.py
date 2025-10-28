@@ -16,16 +16,16 @@ def post_process_async_function():
     sections = content.split("class")
     for i in range(len(sections)):
         return_type_dict: typing.Dict[str, str] = {}
-        matches = re.finditer(r"def (read|write)_(\S+?)\(.+?\) -> (\S+?):", sections[i])
+        matches = re.finditer(r"def (read|write)_(\S+?)\(.+?\) -> ([^:]+):", sections[i])
         for match in matches:
             groups = match.groups()
             if not groups[1].endswith("async") and not groups[1].endswith("unchecked"):
-                return_type_dict[f"{groups[0]}_{groups[1]}"] = groups[2]
+                return_type_dict[f"{groups[0]}_{groups[1]}"] = groups[2].strip()
 
         for key, value in return_type_dict.items():
             sections[i] = re.sub(
                 rf"def {key}_async\((.+?)\) -> typing\.Any:",
-                lambda match: f"async def {key}_async({match.group(1)}) -> {value}:",
+                lambda match: f"def {key}_async({match.group(1)}) -> typing.Awaitable[{value}]:",
                 sections[i],
             )
 
