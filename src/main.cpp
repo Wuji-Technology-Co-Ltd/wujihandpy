@@ -85,6 +85,7 @@ PYBIND11_MODULE(_core, m) {
     register_py_interface<data::joint::Temperature>("temperature", hand, finger, joint);
     register_py_interface<data::joint::ResetError>("reset_error", hand, finger, joint);
     register_py_interface<data::joint::ErrorCode>("error_code", hand, finger, joint);
+    register_py_interface<data::joint::OpenloopControl>("openloop_control", hand, finger, joint);
     register_py_interface<data::joint::Enabled>("enabled", hand, finger, joint);
     register_py_interface<data::joint::ActualPosition>("actual_position", hand, finger, joint);
     register_py_interface<data::joint::TargetPosition>("target_position", hand, finger, joint);
