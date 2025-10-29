@@ -79,10 +79,10 @@ endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE BUILDING_WUJIHANDCPP)
 
-include_directories(SYSTEM ${LIBUSB_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${LIBUSB_INCLUDE_DIRS})
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
-include_directories(${PROJECT_SOURCE_DIR}/src)
+target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 if(WIN32)
     find_package(PkgConfig REQUIRED)
@@ -92,9 +92,9 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PUBLIC ${LIBUSB_LIBRARIES})
 elseif(UNIX)
     target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE /usr/include/libusb-1.0)
-    target_link_libraries(${PROJECT_NAME} PRIVATE usb-1.0)
+    target_link_libraries(${PROJECT_NAME} PUBLIC usb-1.0)
     find_package(Threads REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
 endif()
 
 include(FetchContent)
@@ -148,8 +148,7 @@ if(BUILD_TESTING)
     add_executable(wujihandcpp_tests
         ${WUJIHANDCPP_TEST_SOURCES}
     )
-    target_link_libraries(wujihandcpp_tests PRIVATE gtest_main ${PROJECT_NAME} Threads::Threads)
-    target_include_directories(wujihandcpp_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    target_link_libraries(wujihandcpp_tests PRIVATE gtest_main ${PROJECT_NAME})
 
     add_test(NAME wujihandcpp_tests COMMAND wujihandcpp_tests)
 endif()
