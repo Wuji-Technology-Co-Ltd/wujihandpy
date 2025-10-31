@@ -30,12 +30,11 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+#include <wujihandcpp/utility/logging.hpp>
 
 #include "utility/singleton.hpp"
 
 namespace wujihandcpp::logging {
-
-using Level = spdlog::level::level_enum;
 
 class Config {
 public:
@@ -73,7 +72,7 @@ private:
             log_to_file_.store(true, std::memory_order::relaxed);
 
         if (!parse_level(log_level_, std::getenv("WUJI_LOG_LEVEL")))
-            log_level_.store(spdlog::level::info, std::memory_order::relaxed);
+            log_level_.store(Level::INFO, std::memory_order::relaxed);
 
         if (const char* value = std::getenv("WUJI_LOG_PATH"))
             log_path_ = std::filesystem::path{value};
@@ -140,19 +139,19 @@ private:
 
         auto str = to_lower_string(value);
         if (str == "trace")
-            destination.store(spdlog::level::trace, std::memory_order::relaxed);
+            destination.store(Level::TRACE, std::memory_order::relaxed);
         else if (str == "debug")
-            destination.store(spdlog::level::debug, std::memory_order::relaxed);
+            destination.store(Level::DEBUG, std::memory_order::relaxed);
         else if (str == "info" || str == "information")
-            destination.store(spdlog::level::info, std::memory_order::relaxed);
+            destination.store(Level::INFO, std::memory_order::relaxed);
         else if (str == "warn" || str == "warning")
-            destination.store(spdlog::level::warn, std::memory_order::relaxed);
+            destination.store(Level::WARN, std::memory_order::relaxed);
         else if (str == "err" || str == "error")
-            destination.store(spdlog::level::err, std::memory_order::relaxed);
+            destination.store(Level::ERR, std::memory_order::relaxed);
         else if (str == "critical" || str == "crit")
-            destination.store(spdlog::level::critical, std::memory_order::relaxed);
+            destination.store(Level::CRITICAL, std::memory_order::relaxed);
         else if (str == "off")
-            destination.store(spdlog::level::off, std::memory_order::relaxed);
+            destination.store(Level::OFF, std::memory_order::relaxed);
         else
             return false;
 
@@ -205,25 +204,25 @@ public: // Config
 
     void set_log_level(Level value) noexcept {
         if (logger_) [[likely]]
-            logger_->set_level(value);
+            logger_->set_level(to_spdlog_level(value));
     }
 
     Level level() const {
         if (logger_) [[likely]]
-            return logger_->level();
+            return from_spdlog_level(logger_->level());
         else
-            return spdlog::level::off;
+            return Level::OFF;
     }
 
-    void set_level(Level lvl) {
+    void set_level(Level level) {
         if (logger_) [[likely]]
-            logger_->set_level(lvl);
+            logger_->set_level(to_spdlog_level(level));
     }
 
 public: // Logging
-    bool should_log(Level lvl) const {
+    bool should_log(Level level) const {
         if (logger_) [[likely]]
-            return logger_->should_log(lvl);
+            return logger_->should_log(to_spdlog_level(level));
         else
             return false;
     }
@@ -236,75 +235,75 @@ public: // Logging
 public: // Logging.Formatted
     template <typename... Args>
     void trace(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-        log(spdlog::level::trace, fmt, std::forward<Args>(args)...);
+        log_internal(spdlog::level::trace, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     void debug(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-        log(spdlog::level::debug, fmt, std::forward<Args>(args)...);
+        log_internal(spdlog::level::debug, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     void info(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-        log(spdlog::level::info, fmt, std::forward<Args>(args)...);
+        log_internal(spdlog::level::info, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     void warn(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-        log(spdlog::level::warn, fmt, std::forward<Args>(args)...);
+        log_internal(spdlog::level::warn, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     void error(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-        log(spdlog::level::err, fmt, std::forward<Args>(args)...);
+        log_internal(spdlog::level::err, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     void critical(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-        log(spdlog::level::critical, fmt, std::forward<Args>(args)...);
+        log_internal(spdlog::level::critical, fmt, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    void log(Level lvl, spdlog::format_string_t<Args...> fmt, Args&&... args) {
+    void log(Level level, spdlog::format_string_t<Args...> fmt, Args&&... args) {
         if (logger_) [[likely]]
-            logger_->log(lvl, fmt, std::forward<Args>(args)...);
+            log_internal(to_spdlog_level(level), fmt, std::forward<Args>(args)...);
     }
 
 public: // Logging.Raw
     template <typename T>
     void trace(const T& msg) {
-        log(spdlog::level::trace, msg);
+        log_internal(spdlog::level::trace, msg);
     }
 
     template <typename T>
     void debug(const T& msg) {
-        log(spdlog::level::debug, msg);
+        log_internal(spdlog::level::debug, msg);
     }
 
     template <typename T>
     void info(const T& msg) {
-        log(spdlog::level::info, msg);
+        log_internal(spdlog::level::info, msg);
     }
 
     template <typename T>
     void warn(const T& msg) {
-        log(spdlog::level::warn, msg);
+        log_internal(spdlog::level::warn, msg);
     }
 
     template <typename T>
     void error(const T& msg) {
-        log(spdlog::level::err, msg);
+        log_internal(spdlog::level::err, msg);
     }
 
     template <typename T>
     void critical(const T& msg) {
-        log(spdlog::level::critical, msg);
+        log_internal(spdlog::level::critical, msg);
     }
 
     template <typename T>
-    void log(Level lvl, const T& msg) {
+    void log(Level level, const T& msg) {
         if (logger_) [[likely]]
-            logger_->log(lvl, msg);
+            log_internal(to_spdlog_level(level), msg);
     }
 
 private:
@@ -351,7 +350,7 @@ private:
             logger_ = std::make_shared<spdlog::async_logger>(
                 "logger", sinks.begin(), sinks.end(), thread_pool_,
                 spdlog::async_overflow_policy::overrun_oldest);
-            logger_->set_level(config.log_level());
+            logger_->set_level(to_spdlog_level(config.log_level()));
             logger_->flush_on(spdlog::level::warn);
 
             if (log_path_error.empty()) {
@@ -369,6 +368,19 @@ private:
         }
     }
 
+    template <typename... Args>
+    void log_internal(
+        spdlog::level::level_enum level, spdlog::format_string_t<Args...> fmt, Args&&... args) {
+        if (logger_) [[likely]]
+            logger_->log(level, fmt, std::forward<Args>(args)...);
+    }
+
+    template <typename T>
+    void log_internal(spdlog::level::level_enum level, const T& msg) {
+        if (logger_) [[likely]]
+            logger_->log(level, msg);
+    }
+
     static std::uint64_t current_process_id() noexcept {
 #if defined(_WIN32)
         return static_cast<std::uint64_t>(::_getpid());
@@ -381,6 +393,25 @@ private:
         const auto timestamp =
             std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
         return std::format("{:%Y%m%d_%H%M%S}_{}.log", timestamp, current_process_id());
+    }
+
+    static constexpr spdlog::level::level_enum to_spdlog_level(Level level) {
+        static_assert(sizeof(Level) == sizeof(spdlog::level::level_enum));
+
+        static_assert(static_cast<int>(Level::TRACE) == static_cast<int>(spdlog::level::trace));
+        static_assert(static_cast<int>(Level::DEBUG) == static_cast<int>(spdlog::level::debug));
+        static_assert(static_cast<int>(Level::INFO) == static_cast<int>(spdlog::level::info));
+        static_assert(static_cast<int>(Level::WARN) == static_cast<int>(spdlog::level::warn));
+        static_assert(static_cast<int>(Level::ERR) == static_cast<int>(spdlog::level::err));
+        static_assert(
+            static_cast<int>(Level::CRITICAL) == static_cast<int>(spdlog::level::critical));
+        static_assert(static_cast<int>(Level::OFF) == static_cast<int>(spdlog::level::off));
+
+        return static_cast<spdlog::level::level_enum>(level);
+    }
+
+    static constexpr Level from_spdlog_level(spdlog::level::level_enum level) {
+        return static_cast<Level>(level);
     }
 
     class LevelBasedConsoleSink : public spdlog::sinks::sink {
@@ -419,28 +450,28 @@ private:
     std::shared_ptr<spdlog::logger> logger_;
 };
 
-void Config::set_log_to_console(bool value) noexcept {
+inline void Config::set_log_to_console(bool value) noexcept {
     auto guard = Logger::acquire_instance_mutex();
     if (Logger::has_instance())
         Logger::get_instance().set_log_to_console(value);
     log_to_console_.store(value, std::memory_order::relaxed);
 }
 
-void Config::set_log_to_file(bool value) noexcept {
+inline void Config::set_log_to_file(bool value) noexcept {
     auto guard = Logger::acquire_instance_mutex();
     if (Logger::has_instance())
         Logger::get_instance().set_log_to_file(value);
     log_to_file_.store(value, std::memory_order::relaxed);
 }
 
-void Config::set_log_level(Level value) noexcept {
+inline void Config::set_log_level(Level value) noexcept {
     auto guard = Logger::acquire_instance_mutex();
     if (Logger::has_instance())
         Logger::get_instance().set_level(value);
     log_level_.store(value, std::memory_order::relaxed);
 }
 
-void Config::set_log_path(std::filesystem::path value) {
+inline void Config::set_log_path(std::filesystem::path value) {
     auto guard = Logger::acquire_instance_mutex();
     if (Logger::has_instance())
         throw std::logic_error("It is illegal to set log path after the Logger is constructed");
@@ -448,8 +479,8 @@ void Config::set_log_path(std::filesystem::path value) {
     log_path_ = std::move(value);
 }
 
-Config& get_config() { return Config::get_instance(); }
+inline Config& get_config() { return Config::get_instance(); }
 
-Logger& get_logger() { return Logger::get_instance(); }
+inline Logger& get_logger() { return Logger::get_instance(); }
 
 } // namespace wujihandcpp::logging

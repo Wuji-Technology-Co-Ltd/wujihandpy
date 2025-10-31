@@ -303,7 +303,7 @@ private:
     }
 
     void transmit_transfer_completed_callback(libusb_transfer* transfer) {
-        if (logger_.should_log(logging::Level::trace)) {
+        if (logger_.should_log(logging::Level::TRACE)) {
             const auto* begin = transfer->buffer;
             const auto* end = begin + transfer->actual_length;
             logger_.trace(
@@ -315,7 +315,7 @@ private:
     }
 
     void receive_transfer_completed_callback(libusb_transfer* transfer) {
-        if (logger_.should_log(logging::Level::trace)) {
+        if (logger_.should_log(logging::Level::TRACE)) {
             const auto* begin = transfer->buffer;
             const auto* end = begin + transfer->actual_length;
             logger_.trace(
