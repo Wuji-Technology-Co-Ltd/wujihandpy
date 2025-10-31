@@ -18,7 +18,8 @@ public:
     static_assert(is_legal_transfer_prefill<TransferPrefill>);
 
     explicit AsyncTransmitBuffer(Driver& driver, size_t alloc_transfer_count)
-        : driver_(driver)
+        : logger_(logging::get_logger())
+        , driver_(driver)
         , free_transfers_(alloc_transfer_count)
         , alloc_transfer_count_(alloc_transfer_count) {
 
@@ -67,23 +68,23 @@ public:
                 ret = libusb_handle_events(driver_.libusb_context_);
             }
             if (ret != 0) {
-                LOG_ERROR(
+                logger_.error(
                     "Fatal error during TransmitBuffer destruction: The function "
-                    "libusb_handle_events returned an exception value: %d, which means we "
+                    "libusb_handle_events returned an exception value: {}, which means we "
                     "cannot release all memory allocated for transfers.",
                     ret);
             } else if (std::chrono::steady_clock::now() - start > std::chrono::seconds(1)) {
-                LOG_ERROR(
+                logger_.error(
                     "Fatal error during TransmitBuffer destruction: The usb transmit complete "
                     "callback was not called for all transfers, which means we cannot release "
                     "all memory allocated for transfers.");
             } else
                 continue;
 
-            LOG_ERROR(
+            logger_.error(
                 "The destructor will exit normally, but the unrecoverable memory leak "
                 "has already occurred. This may be a problem caused by libusb.");
-            LOG_ERROR("Number of leaked transfers: %zu", unreleased_transfer_count);
+            logger_.error("Number of leaked transfers: {}", unreleased_transfer_count);
             break;
         }
     }
@@ -104,7 +105,7 @@ public:
             auto front = free_transfers_.front();
             if (!front) [[unlikely]] {
                 if (!transfers_all_busy_)
-                    LOG_ERROR("Failed to fetch free buffer: All transfers are busy!");
+                    logger_.error("Failed to fetch free buffer: All transfers are busy!");
                 transfers_all_busy_ = true;
                 return nullptr;
             } else
@@ -151,10 +152,10 @@ private:
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
             if (ret == LIBUSB_ERROR_NO_DEVICE)
-                LOG_ERROR(
+                logger_.error(
                     "Failed to submit transmit transfer: Device disconnected. Terminating...");
             else
-                LOG_ERROR("Failed to submit transmit transfer: %d. Terminating...", ret);
+                logger_.error("Failed to submit transmit transfer: {}. Terminating...", ret);
             std::terminate();
         }
 
@@ -163,13 +164,14 @@ private:
 
     void usb_transmit_complete_callback(libusb_transfer* transfer) {
         if (transfer->status != LIBUSB_TRANSFER_COMPLETED) [[unlikely]] {
-            LOG_ERROR(
-                "USB transmitting error: Transfer not completed! status=%d", transfer->status);
+            logger_.error(
+                "USB transmitting error: Transfer not completed! status={}",
+                static_cast<int>(transfer->status));
         }
 
         if (transfer->actual_length != transfer->length) [[unlikely]]
-            LOG_ERROR(
-                "USB transmitting error: transmitted(%d) < expected(%d)", transfer->actual_length,
+            logger_.error(
+                "USB transmitting error: transmitted({}) < expected({})", transfer->actual_length,
                 transfer->length);
 
         transfer->length = prefill_size_;
@@ -177,13 +179,13 @@ private:
         static_cast<Device&>(driver_).transmit_transfer_completed_callback(transfer);
 
         if (!free_transfers_.push_back(transfer)) [[unlikely]] {
-            LOG_ERROR(
+            logger_.error(
                 "Error while attempting to recycle transmit transfer into the ring queue: "
                 "The ring queue is full.");
-            LOG_ERROR(
+            logger_.error(
                 "This situation should theoretically be impossible. Its occurrence typically "
                 "indicates an issue with multithreaded synchronization in the code.");
-            LOG_ERROR(
+            logger_.error(
                 "Although this problem is not fatal, termination is triggered to ensure the "
                 "issue is promptly identified.");
             std::terminate();
@@ -196,6 +198,8 @@ private:
         else
             return int(sizeof(TransferPrefill));
     }();
+
+    logging::Logger& logger_;
 
     Driver& driver_;
 

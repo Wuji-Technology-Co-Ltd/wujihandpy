@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <format>
 #include <stdexcept>
 #include <vector>
 
@@ -25,7 +26,8 @@ public:
     template <typename TransferPrefill = void>
     class AsyncTransmitBuffer;
 
-    explicit Driver(uint16_t usb_vid, int32_t usb_pid, const char* serial_number) {
+    explicit Driver(uint16_t usb_vid, int32_t usb_pid, const char* serial_number)
+        : logger_(logging::get_logger()) {
         if (!init(usb_vid, usb_pid, serial_number)) {
             throw std::runtime_error{"Failed to init."};
         }
@@ -47,9 +49,10 @@ public:
             libusb_device_handle_, out_endpoint_, libusb_data, length, &actual_length, 500);
         if (ret != 0) [[unlikely]] {
             if (ret == LIBUSB_ERROR_NO_DEVICE)
-                LOG_ERROR("Failed to submit transmit transfer: Device disconnected.");
+                logger_.error("Failed to submit transmit transfer: Device disconnected.");
             else
-                LOG_ERROR("Failed to submit transmit transfer: %d (%s).", ret, libusb_errname(ret));
+                logger_.error(
+                    "Failed to submit transmit transfer: {} ({}).", ret, libusb_errname(ret));
         }
 
         return actual_length;
@@ -73,7 +76,7 @@ private:
 
         ret = libusb_init(&libusb_context_);
         if (ret != 0) [[unlikely]] {
-            LOG_ERROR("Failed to init libusb: %d (%s)", ret, libusb_errname(ret));
+            logger_.error("Failed to init libusb: {} ({})", ret, libusb_errname(ret));
             return false;
         }
         utility::FinalAction exit_libusb{[this]() { libusb_exit(libusb_context_); }};
@@ -85,14 +88,14 @@ private:
         if constexpr (utility::is_linux()) {
             ret = libusb_detach_kernel_driver(libusb_device_handle_, target_interface_);
             if (ret != LIBUSB_ERROR_NOT_FOUND && ret != 0) [[unlikely]] {
-                LOG_ERROR("Failed to detach kernel driver: %d (%s)", ret, libusb_errname(ret));
+                logger_.error("Failed to detach kernel driver: {} ({})", ret, libusb_errname(ret));
                 return false;
             }
         }
 
         ret = libusb_claim_interface(libusb_device_handle_, target_interface_);
         if (ret != 0) [[unlikely]] {
-            LOG_ERROR("Failed to claim interface: %d (%s)", ret, libusb_errname(ret));
+            logger_.error("Failed to claim interface: {} ({})", ret, libusb_errname(ret));
             return false;
         }
         utility::FinalAction release_interface{
@@ -100,7 +103,7 @@ private:
 
         libusb_receive_transfer_ = libusb_alloc_transfer(0);
         if (!libusb_receive_transfer_) [[unlikely]] {
-            LOG_ERROR("Failed to alloc receive transfer");
+            logger_.error("Failed to alloc receive transfer");
             return false;
         }
 
@@ -113,7 +116,7 @@ private:
             this, 0);
         ret = libusb_submit_transfer(libusb_receive_transfer_);
         if (ret != 0) [[unlikely]] {
-            LOG_ERROR("Failed to submit receive transfer: %d (%s)", ret, libusb_errname(ret));
+            logger_.error("Failed to submit receive transfer: {} ({})", ret, libusb_errname(ret));
             return false;
         }
 
@@ -128,8 +131,8 @@ private:
         libusb_device** device_list = nullptr;
         const ssize_t device_count = libusb_get_device_list(libusb_context_, &device_list);
         if (device_count < 0) {
-            LOG_ERROR(
-                "Failed to get device list: %zd (%s)", device_count,
+            logger_.error(
+                "Failed to get device list: {} ({})", device_count,
                 libusb_errname(static_cast<int>(device_count)));
             return false;
         }
@@ -146,7 +149,8 @@ private:
         for (ssize_t i = 0; i < device_count; i++) {
             int ret = libusb_get_device_descriptor(device_list[i], &device_descriptors[i]);
             if (ret != 0 || device_descriptors[i].bLength == 0) {
-                LOG_WARN("A device descriptor failed to get: %d (%s)", ret, libusb_errname(ret));
+                logger_.warn(
+                    "A device descriptor failed to get: {} ({})", ret, libusb_errname(ret));
                 continue;
             }
             auto& descriptors = device_descriptors[i];
@@ -184,18 +188,13 @@ private:
             for (auto& device : devices_opened)
                 libusb_close(device);
 
-            std::fprintf(stderr, "[ERROR] ");
-            if (devices_opened.size())
-                std::fprintf(stderr, "%zu devices ", devices_opened.size());
-            else
-                std::fprintf(stderr, "No device ");
-            std::fprintf(stderr, "found with specified vendor id (0x%04x)", vendor_id);
-
-            if (product_id >= 0)
-                std::fprintf(stderr, ", product id (0x%04x)", product_id);
-            if (serial_number)
-                std::fprintf(stderr, ", serial number (%s)", serial_number);
-            std::fprintf(stderr, "\n");
+            logger_.error(
+                "{} found with specified vendor id (0x{:04x}){}{}",
+                devices_opened.size() ? std::format("{} devices", devices_opened.size()).c_str()
+                                      : "No device",
+                vendor_id,
+                product_id >= 0 ? std::format(", product id (0x{:04x})", product_id).c_str() : "",
+                serial_number ? std::format(", serial number ({})", serial_number).c_str() : "");
 
             int relaxing_count = print_matched_unmatched_devices(
                 device_list, device_count, device_descriptors, vendor_id, product_id,
@@ -203,15 +202,15 @@ private:
 
             if (devices_opened.size()) {
                 if (!serial_number)
-                    LOG_ERROR(
+                    logger_.error(
                         "To ensure correct device selection, please specify the Serial Number");
                 else
-                    LOG_ERROR(
+                    logger_.error(
                         "Multiple devices found, which is unusual. Consider using a device "
                         "with a unique Serial Number");
             } else {
                 if (relaxing_count)
-                    LOG_ERROR("Consider relaxing some filters");
+                    logger_.error("Consider relaxing some filters");
             }
 
             return false;
@@ -238,15 +237,14 @@ private:
             if (product_id >= 0 && descriptors.idProduct != product_id)
                 matched = false;
 
-            std::fprintf(
-                stderr, "[ERROR]   Device %d (%04x:%04x): ", ++j, descriptors.idVendor,
-                descriptors.idProduct);
+            const auto device_str = std::format(
+                "Device {} ({:04x}:{:04x}):", ++j, descriptors.idVendor, descriptors.idProduct);
 
             libusb_device_handle* handle;
             int ret = libusb_open(device_list[i], &handle);
             if (ret != 0) {
-                std::fprintf(
-                    stderr, "Ignored because device could not be opened: %d (%s)\n", ret,
+                logger_.error(
+                    "{} Ignored because device could not be opened: {} ({})", device_str, ret,
                     libusb_errname(ret));
                 continue;
             }
@@ -256,21 +254,24 @@ private:
             int n = libusb_get_string_descriptor_ascii(
                 handle, descriptors.iSerialNumber, serial_buf, sizeof(serial_buf) - 1);
             if (n < 0) {
-                std::fprintf(
-                    stderr, "Ignored because descriptor could not be read: %d (%s) ignored\n", n,
+                logger_.error(
+                    "{} Ignored because descriptor could not be read: {} ({})", device_str, n,
                     libusb_errname(n));
                 continue;
             }
             serial_buf[n] = '\0';
-            std::fprintf(stderr, "Serial Number = %s", serial_buf);
+            const char* serial_str = reinterpret_cast<char*>(serial_buf);
 
-            if (serial_number && strcmp(reinterpret_cast<char*>(serial_buf), serial_number) != 0)
+            if (serial_number && std::strcmp(serial_str, serial_number) != 0)
                 matched = false;
 
-            if (matched)
-                std::fprintf(stderr, " <-- Matched #%d\n", ++k);
-            else
-                std::fprintf(stderr, "\n");
+            if (matched) {
+                const int match_index = ++k;
+                logger_.error(
+                    "{} Serial Number = {} <-- Matched #{}", device_str, serial_str, match_index);
+            } else {
+                logger_.error("{} Serial Number = {}", device_str, serial_str);
+            }
         }
         return j;
     }
@@ -286,12 +287,12 @@ private:
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
             if (ret == LIBUSB_ERROR_NO_DEVICE)
-                LOG_ERROR(
+                logger_.error(
                     "Failed to re-submit receive transfer: Device disconnected. "
                     "Terminating...");
             else
-                LOG_ERROR(
-                    "Failed to re-submit receive transfer: %d (%s). Terminating...", ret,
+                logger_.error(
+                    "Failed to re-submit receive transfer: {} ({}). Terminating...", ret,
                     libusb_errname(ret));
             std::terminate();
         }
@@ -323,6 +324,8 @@ private:
 
     static constexpr int max_transmit_length_ = 512;
     static constexpr int max_receive_length_ = 512;
+
+    logging::Logger& logger_;
 
     libusb_context* libusb_context_;
     libusb_device_handle* libusb_device_handle_;

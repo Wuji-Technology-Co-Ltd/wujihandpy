@@ -97,6 +97,16 @@ elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 endif()
 
+include(FetchContent)
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.16.0
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(spdlog)
+target_link_libraries(${PROJECT_NAME} PUBLIC spdlog::spdlog)
+
 if(NOT MSVC)
     # GCC/Clang
     if(STATIC_LINK_STDCPP)
