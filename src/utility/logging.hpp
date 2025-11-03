@@ -232,6 +232,15 @@ public: // Logging
             logger_->flush();
     }
 
+    void sync_flush() {
+        // Multi-thread safe sink must be used because this function
+        // is typically not performed in thread_pool_.
+        if (console_sink_) [[likely]]
+            console_sink_->flush();
+        if (file_sink_)
+            file_sink_->flush();
+    }
+
 public: // Logging.Formatted
     template <typename... Args>
     void trace(spdlog::format_string_t<Args...> fmt, Args&&... args) {
@@ -309,7 +318,6 @@ public: // Logging.Raw
 private:
     Logger() noexcept {
         try {
-            // Only one thread can be used here, otherwise the _mt sink must be used
             thread_pool_ = std::make_shared<spdlog::details::thread_pool>(8192, 1);
 
             const auto& config = Config::get_instance();
@@ -337,7 +345,7 @@ private:
                     try {
                         log_path = std::filesystem::weakly_canonical(log_path);
                         log_path /= make_timestamped_log_filename();
-                        file_sink_ = std::make_shared<spdlog::sinks::rotating_file_sink_st>(
+                        file_sink_ = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
                             log_path.string(), max_size, max_files);
                         file_sink_->set_level(spdlog::level::trace);
                         file_sink_->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v");
@@ -440,8 +448,8 @@ private:
         };
 
     private:
-        spdlog::sinks::stdout_color_sink_st stdout_sink_;
-        spdlog::sinks::stderr_color_sink_st stderr_sink_;
+        spdlog::sinks::stdout_color_sink_mt stdout_sink_;
+        spdlog::sinks::stderr_color_sink_mt stderr_sink_;
     };
 
     std::shared_ptr<spdlog::sinks::sink> console_sink_, file_sink_;

@@ -23,5 +23,7 @@ WUJIHANDCPP_API void set_log_level(Level value) noexcept;
 
 WUJIHANDCPP_API void set_log_path(const char* value);
 
+WUJIHANDCPP_API void flush() noexcept;
+
 } // namespace logging
 } // namespace wujihandcpp

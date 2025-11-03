@@ -18,4 +18,6 @@ WUJIHANDCPP_API void set_log_path(const char* value) {
     get_config().set_log_path(value);
 }
 
+WUJIHANDCPP_API void flush() noexcept { get_logger().sync_flush(); }
+
 } // namespace wujihandcpp::logging

@@ -33,7 +33,7 @@ AlignEscapedNewlines: Left
 AlignOperands: AlignAfterOperator
 AlignTrailingComments:
     Kind: Always
-    OverEmptyLines: 64
+    OverEmptyLines: 1
 PointerAlignment: Left
 
 AllowAllArgumentsOnNextLine: true
