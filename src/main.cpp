@@ -9,6 +9,7 @@
 
 #include "controller.hpp"
 #include "filter.hpp"
+#include "logging.hpp"
 #include "wrapper.hpp"
 
 namespace py = pybind11;
@@ -47,6 +48,8 @@ PYBIND11_MODULE(_core, m) {
             py::arg("value_array"));
 
     filter::init_module(m);
+
+    logging::init_module(m);
 
     using namespace wujihandcpp;
 

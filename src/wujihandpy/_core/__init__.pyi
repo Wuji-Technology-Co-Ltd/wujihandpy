@@ -3,7 +3,8 @@ import numpy
 import numpy.typing
 import typing
 from . import filter
-__all__: list[str] = ['Finger', 'Hand', 'IController', 'Joint', 'filter']
+from . import logging
+__all__: list[str] = ['Finger', 'Hand', 'IController', 'Joint', 'filter', 'logging']
 class Finger:
     def get_joint_actual_position(self) -> numpy.typing.NDArray[numpy.float64]:
         ...
