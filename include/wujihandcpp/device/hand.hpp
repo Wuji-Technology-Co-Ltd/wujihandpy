@@ -99,7 +99,7 @@ public:
         try {
             write<data::joint::Enabled>(false);
             Latch latch;
-            write_async<data::joint::ControlMode>(latch, 2);
+            write_async<data::joint::ControlMode>(latch, 6);
             write_async<data::joint::CurrentLimit>(latch, 1000);
             latch.wait();
         } catch (const TimeoutError&) {
@@ -155,7 +155,7 @@ public:
 
         {
             Latch latch;
-            write_async<data::joint::ControlMode>(latch, 4);
+            write_async<data::joint::ControlMode>(latch, 5);
             if (enable_upstream)
                 write_async<data::hand::TPdoId>(latch, 1);
             else
@@ -176,7 +176,7 @@ public:
 
         {
             Latch latch;
-            write_async<data::joint::ControlMode>(latch, 2);
+            write_async<data::joint::ControlMode>(latch, 6);
             write_async<data::hand::PdoEnabled>(latch, 0);
             latch.wait();
         }
