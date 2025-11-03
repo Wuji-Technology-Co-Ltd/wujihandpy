@@ -14,12 +14,14 @@
 #include <thread>
 #include <type_traits>
 
+#include <spdlog/fmt/bin_to_hex.h>
 #include <wujihandcpp/protocol/handler.hpp>
 #include <wujihandcpp/utility/api.hpp>
 
 #include "driver/async_transmit_buffer.hpp"
 #include "driver/driver.hpp"
 #include "protocol/protocol.hpp"
+#include "utility/logging.hpp"
 
 namespace wujihandcpp::protocol {
 
@@ -32,6 +34,7 @@ public:
         uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
         size_t storage_unit_count)
         : Driver(usb_vid, usb_pid, serial_number)
+        , logger_(logging::get_logger())
         , default_transmit_buffer_(*this, buffer_transfer_count)
         , tick_thread_transmit_buffer_(*this, buffer_transfer_count)
         , event_thread_([this]() { handle_events(); })
@@ -299,27 +302,25 @@ private:
         header.description = std::bit_cast<int16_t>(description);
     }
 
-    static void transmit_transfer_completed_callback(libusb_transfer* transfer) {
-        // std::cout << std::format(
-        //     "[{:.3f}] Tx: ", std::chrono::duration<double, std::milli>(
-        //                          std::chrono::steady_clock::now().time_since_epoch())
-        //                          .count());
-        // for (int i = 0; i < transfer->actual_length; i++)
-        //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
-        // std::cout << '\n';
+    void transmit_transfer_completed_callback(libusb_transfer* transfer) {
+        if (logger_.should_log(logging::Level::TRACE)) {
+            const auto* begin = transfer->buffer;
+            const auto* end = begin + transfer->actual_length;
+            logger_.trace(
+                "TX [{} bytes] {:Xp}", transfer->actual_length, spdlog::to_hex(begin, end));
+        }
 
         auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
         header.type = 0;
     }
 
     void receive_transfer_completed_callback(libusb_transfer* transfer) {
-        // std::cout << std::format(
-        //     "[{:.3f}] Rx: ", std::chrono::duration<double, std::milli>(
-        //                          std::chrono::steady_clock::now().time_since_epoch())
-        //                          .count());
-        // for (int i = 0; i < transfer->actual_length; i++)
-        //     std::cout << std::format("{:02X} ", transfer->buffer[i]);
-        // std::cout << '\n';
+        if (logger_.should_log(logging::Level::TRACE)) {
+            const auto* begin = transfer->buffer;
+            const auto* end = begin + transfer->actual_length;
+            logger_.trace(
+                "RX [{} bytes] {:Xp}", transfer->actual_length, spdlog::to_hex(begin, end));
+        }
 
         auto pointer = reinterpret_cast<std::byte*>(transfer->buffer);
         const auto sentinel = pointer + transfer->actual_length;
@@ -649,6 +650,8 @@ private:
             size == 2, uint16_t,
             std::conditional_t<
                 size == 4, uint32_t, std::conditional_t<size == 8, uint64_t, void>>>>;
+
+    logging::Logger& logger_;
 
     AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;
     AsyncTransmitBuffer<protocol::Header> tick_thread_transmit_buffer_;
