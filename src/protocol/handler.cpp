@@ -307,7 +307,7 @@ private:
             const auto* begin = transfer->buffer;
             const auto* end = begin + transfer->actual_length;
             logger_.trace(
-                "TX [{} bytes] {:X}", transfer->actual_length, spdlog::to_hex(begin, end));
+                "TX [{} bytes] {:Xp}", transfer->actual_length, spdlog::to_hex(begin, end));
         }
 
         auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
@@ -319,7 +319,7 @@ private:
             const auto* begin = transfer->buffer;
             const auto* end = begin + transfer->actual_length;
             logger_.trace(
-                "RX [{} bytes] {:X}", transfer->actual_length, spdlog::to_hex(begin, end));
+                "RX [{} bytes] {:Xp}", transfer->actual_length, spdlog::to_hex(begin, end));
         }
 
         auto pointer = reinterpret_cast<std::byte*>(transfer->buffer);
