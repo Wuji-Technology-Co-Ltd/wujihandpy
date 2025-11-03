@@ -387,12 +387,9 @@ private:
         }
     }
 
-    void read_sdo_operation_read_failed(std::byte*& pointer) {
+    static void read_sdo_operation_read_failed(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::ReadResultError*>(pointer);
         pointer += sizeof(data);
-
-        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
-        (void)storage;
     }
 
     void read_sdo_operation_write_success(std::byte*& pointer) {
@@ -411,20 +408,9 @@ private:
         }
     }
 
-    void read_sdo_operation_write_failed(std::byte*& pointer) {
+    static void read_sdo_operation_write_failed(std::byte*& pointer) {
         const auto& data = *reinterpret_cast<protocol::sdo::WriteResultError*>(pointer);
         pointer += sizeof(data);
-
-        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
-
-        auto operation = storage.operation.load(std::memory_order::acquire);
-        if (operation.mode == Operation::Mode::NONE) [[unlikely]]
-            return;
-
-        if (operation.state == Operation::State::WRITING) {
-            operation.state = Operation::State::WRITING_CONFIRMING;
-            storage.operation.store(operation, std::memory_order::relaxed);
-        }
     }
 
     StorageUnit& find_storage_by_index(uint16_t index, uint8_t sub_index) {
@@ -487,6 +473,8 @@ private:
                     read_async_unchecked_internal(
                         tick_thread_transmit_buffer_, storage.info.index, storage.info.sub_index);
                 } else if (operation.state == Operation::State::WRITING) {
+                    operation.state = Operation::State::WRITING_CONFIRMING;
+                    storage.operation.store(operation, std::memory_order::relaxed);
                     if (storage.info.size == StorageInfo::Size::_1)
                         write_async_unchecked_internal(
                             tick_thread_transmit_buffer_,
@@ -509,7 +497,8 @@ private:
                             storage.info.index, storage.info.sub_index);
                 }
             }
-            tick_thread_transmit_buffer_.trigger_transmission();
+            fetch_sdo_buffer(tick_thread_transmit_buffer_, 0);
+            tick_thread_transmit_buffer_.trigger_transmission(true);
 
             std::this_thread::sleep_for(update_period);
         }

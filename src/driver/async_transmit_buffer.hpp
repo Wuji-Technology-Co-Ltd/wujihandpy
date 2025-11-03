@@ -128,9 +128,11 @@ public:
         }
     }
 
-    bool trigger_transmission() {
+    bool trigger_transmission(bool allow_empty = false) {
         auto front = free_transfers_.front();
-        if (!front || (*front)->length <= prefill_size_)
+        if (!front)
+            return false;
+        if (!allow_empty && (*front)->length <= prefill_size_)
             return false;
 
         return trigger_transmission_nocheck();
