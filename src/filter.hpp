@@ -32,7 +32,7 @@ public:
     const double cutoff_freq_;
 };
 
-void init_module(py::module_& m) {
+inline void init_module(py::module_& m) {
     auto filter = m.def_submodule("filter");
 
     (void)py::class_<IFilter>(filter, "IFilter");
