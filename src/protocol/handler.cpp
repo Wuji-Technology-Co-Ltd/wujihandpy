@@ -505,12 +505,12 @@ private:
     }
 
     void read_pdo_frame(std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = *reinterpret_cast<protocol::pdo::ReadResult*>(pointer);
+        const auto& data = *reinterpret_cast<protocol::pdo::CommandResult*>(pointer);
         pointer += sizeof(data);
 
         if (pointer >= sentinel)
             return;
-        if (data.pdo_id != 0x0101)
+        if (data.read_executed != 1)
             return;
 
         for (int i = 0; i < 5; i++)
@@ -523,7 +523,7 @@ private:
     }
 
     void realtime_controller_thread_main(const std::stop_token& token, bool upstream_enabled) {
-        constexpr double update_rate = 1000.0;
+        constexpr double update_rate = 500.0;
         constexpr auto update_period =
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(1.0 / update_rate));
@@ -531,9 +531,8 @@ private:
         auto begin = std::chrono::steady_clock::now();
         auto next_iteration_time = begin;
 
+        realtime_controller_->setup(update_rate);
         if (upstream_enabled) {
-            realtime_controller_->setup(500.0);
-
             const uint64_t old_version = pdo_read_result_version_.load(std::memory_order::relaxed);
             while (!token.stop_requested()) {
                 pdo_read_async_unchecked();
@@ -543,41 +542,33 @@ private:
                     break;
             }
 
-            bool upstream = true;
             while (!token.stop_requested()) {
-                if (upstream)
-                    pdo_read_async_unchecked();
-                else {
-                    device::IRealtimeController::JointPositions positions;
-                    for (int i = 0; i < 5; i++)
-                        for (int j = 0; j < 4; j++) {
-                            auto& value = positions.value[i][j];
-                            value = extract_raw_position(
-                                pdo_read_result_[i][j].load(std::memory_order::relaxed));
-                            if (j == 0 && i != 0)
-                                value = -value;
-                        }
+                device::IRealtimeController::JointPositions positions;
+                for (int i = 0; i < 5; i++)
+                    for (int j = 0; j < 4; j++) {
+                        auto& value = positions.value[i][j];
+                        value = extract_raw_position(
+                            pdo_read_result_[i][j].load(std::memory_order::relaxed));
+                        if (j == 0 && i != 0)
+                            value = -value;
+                    }
 
-                    auto target_positions = realtime_controller_->step(&positions);
+                auto target_positions = realtime_controller_->step(&positions);
 
-                    pdo_write_async_unchecked(
-                        target_positions.value,
-                        static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                                  next_iteration_time - begin)
-                                                  .count()));
-                }
+                pdo_write_async_unchecked(
+                    true, target_positions.value,
+                    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                              next_iteration_time - begin)
+                                              .count()));
 
-                upstream = !upstream;
                 next_iteration_time += update_period;
                 std::this_thread::sleep_until(next_iteration_time);
             }
         } else {
-            realtime_controller_->setup(1000.0);
-
             while (!token.stop_requested()) {
                 auto target_positions = realtime_controller_->step(nullptr);
                 pdo_write_async_unchecked(
-                    target_positions.value,
+                    false, target_positions.value,
                     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
                                               next_iteration_time - begin)
                                               .count()));
@@ -615,11 +606,12 @@ private:
         new (buffer) protocol::pdo::Read{};
         default_transmit_buffer_.trigger_transmission();
     }
-
-    void pdo_write_async_unchecked(const double (&target_positions)[5][4], uint32_t timestamp) {
+    void pdo_write_async_unchecked(
+        bool upstream_enabled, const double (&target_positions)[5][4], uint32_t timestamp) {
         std::byte* buffer =
             fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
+        payload->enable_read = upstream_enabled;
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {
