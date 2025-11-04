@@ -7,6 +7,7 @@
 #include <atomic>
 #include <bit>
 #include <chrono>
+#include <format>
 #include <map>
 #include <memory>
 #include <numbers>
@@ -325,41 +326,55 @@ private:
         auto pointer = reinterpret_cast<std::byte*>(transfer->buffer);
         const auto sentinel = pointer + transfer->actual_length;
 
-        auto& header = *reinterpret_cast<protocol::Header*>(pointer);
-        pointer += sizeof(protocol::Header);
+        try {
+            const auto& header =
+                read_frame_struct<protocol::Header>(pointer, sentinel, "Frame header");
 
-        if (header.type == 0x21)
-            read_sdo_frame(pointer, sentinel);
-        else if (header.type == 0x11)
-            read_pdo_frame(pointer, sentinel);
+            if (header.type == 0x21)
+                read_sdo_frame(pointer, sentinel);
+            else if (header.type == 0x11)
+                read_pdo_frame(pointer, sentinel);
+        } catch (const std::runtime_error& ex) {
+            logger_.error("RX Frame parsing failed: {}", ex.what());
+            const auto* begin = transfer->buffer;
+            const auto* end = begin + transfer->actual_length;
+            logger_.error(
+                "RX Frame dump [{} bytes] {:Xp}", transfer->actual_length,
+                spdlog::to_hex(begin, end));
+        }
     }
 
     void read_sdo_frame(std::byte*& pointer, const std::byte* sentinel) {
         while (pointer < sentinel) {
             auto control = static_cast<uint8_t>(*pointer);
             if (control == 0x35)
-                read_sdo_operation_read_success<uint8_t>(pointer);
+                read_sdo_operation_read_success<uint8_t>(pointer, sentinel);
             else if (control == 0x37)
-                read_sdo_operation_read_success<uint16_t>(pointer);
+                read_sdo_operation_read_success<uint16_t>(pointer, sentinel);
             else if (control == 0x39)
-                read_sdo_operation_read_success<uint32_t>(pointer);
+                read_sdo_operation_read_success<uint32_t>(pointer, sentinel);
             else if (control == 0x3D)
-                read_sdo_operation_read_success<uint64_t>(pointer);
+                read_sdo_operation_read_success<uint64_t>(pointer, sentinel);
             else if (control == 0x33)
-                read_sdo_operation_read_failed(pointer);
+                read_sdo_operation_read_failed(pointer, sentinel);
             else if (control == 0x21)
-                read_sdo_operation_write_success(pointer);
+                read_sdo_operation_write_success(pointer, sentinel);
             else if (control == 0x23)
-                read_sdo_operation_write_failed(pointer);
-            else
+                read_sdo_operation_write_failed(pointer, sentinel);
+            else if (control == 0x00)
                 break;
+            else
+                throw std::runtime_error(
+                    std::format(
+                        "Invalid SDO command specifier: 0x{:02X} at offset {} from end", control,
+                        pointer - sentinel));
         }
     }
 
     template <typename T>
-    void read_sdo_operation_read_success(std::byte*& pointer) {
-        const auto& data = *reinterpret_cast<protocol::sdo::ReadResultSuccess<T>*>(pointer);
-        pointer += sizeof(data);
+    void read_sdo_operation_read_success(std::byte*& pointer, const std::byte* sentinel) {
+        const auto& data = read_frame_struct<protocol::sdo::ReadResultSuccess<T>>(
+            pointer, sentinel, "SDO read success frame");
 
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
@@ -387,17 +402,14 @@ private:
         }
     }
 
-    void read_sdo_operation_read_failed(std::byte*& pointer) {
-        const auto& data = *reinterpret_cast<protocol::sdo::ReadResultError*>(pointer);
-        pointer += sizeof(data);
-
-        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
-        (void)storage;
+    static void read_sdo_operation_read_failed(std::byte*& pointer, const std::byte* sentinel) {
+        read_frame_struct<protocol::sdo::ReadResultError>(
+            pointer, sentinel, "SDO read failure frame");
     }
 
-    void read_sdo_operation_write_success(std::byte*& pointer) {
-        const auto& data = *reinterpret_cast<protocol::sdo::WriteResultSuccess*>(pointer);
-        pointer += sizeof(data);
+    void read_sdo_operation_write_success(std::byte*& pointer, const std::byte* sentinel) {
+        const auto& data = read_frame_struct<protocol::sdo::WriteResultSuccess>(
+            pointer, sentinel, "SDO write success frame");
 
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
@@ -411,27 +423,17 @@ private:
         }
     }
 
-    void read_sdo_operation_write_failed(std::byte*& pointer) {
-        const auto& data = *reinterpret_cast<protocol::sdo::WriteResultError*>(pointer);
-        pointer += sizeof(data);
-
-        StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
-
-        auto operation = storage.operation.load(std::memory_order::acquire);
-        if (operation.mode == Operation::Mode::NONE) [[unlikely]]
-            return;
-
-        if (operation.state == Operation::State::WRITING) {
-            operation.state = Operation::State::WRITING_CONFIRMING;
-            storage.operation.store(operation, std::memory_order::relaxed);
-        }
+    static void read_sdo_operation_write_failed(std::byte*& pointer, const std::byte* sentinel) {
+        read_frame_struct<protocol::sdo::WriteResultError>(
+            pointer, sentinel, "SDO write failure frame");
     }
 
     StorageUnit& find_storage_by_index(uint16_t index, uint8_t sub_index) {
         auto it = index_storage_map_.find(
             std::bit_cast<uint32_t>(IndexMapKey{.index = index, .sub_index = sub_index}));
         if (it == index_storage_map_.end())
-            throw std::runtime_error{"Unexpected sdo index & sub-index!"};
+            throw std::runtime_error{std::format(
+                "SDO object not found: index=0x{:04X}, sub-index=0x{:02X}", index, sub_index)};
         return *it->second;
     }
 
@@ -487,6 +489,8 @@ private:
                     read_async_unchecked_internal(
                         tick_thread_transmit_buffer_, storage.info.index, storage.info.sub_index);
                 } else if (operation.state == Operation::State::WRITING) {
+                    operation.state = Operation::State::WRITING_CONFIRMING;
+                    storage.operation.store(operation, std::memory_order::relaxed);
                     if (storage.info.size == StorageInfo::Size::_1)
                         write_async_unchecked_internal(
                             tick_thread_transmit_buffer_,
@@ -509,20 +513,21 @@ private:
                             storage.info.index, storage.info.sub_index);
                 }
             }
-            tick_thread_transmit_buffer_.trigger_transmission();
+            fetch_sdo_buffer(tick_thread_transmit_buffer_, 0);
+            tick_thread_transmit_buffer_.trigger_transmission(true);
 
             std::this_thread::sleep_for(update_period);
         }
     }
 
     void read_pdo_frame(std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = *reinterpret_cast<protocol::pdo::ReadResult*>(pointer);
-        pointer += sizeof(data);
+        const auto& data = read_frame_struct<protocol::pdo::CommandResult>(
+            pointer, sentinel, "PDO CommandResult frame");
 
-        if (pointer >= sentinel)
-            return;
-        if (data.pdo_id != 0x0101)
-            return;
+        if (data.read_executed != 1)
+            throw std::runtime_error(
+                std::format(
+                    "PDO frame invalid: read_executed flag is 0x{:02X}", data.read_executed));
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++)
@@ -534,7 +539,7 @@ private:
     }
 
     void realtime_controller_thread_main(const std::stop_token& token, bool upstream_enabled) {
-        constexpr double update_rate = 1000.0;
+        constexpr double update_rate = 500.0;
         constexpr auto update_period =
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(1.0 / update_rate));
@@ -542,9 +547,8 @@ private:
         auto begin = std::chrono::steady_clock::now();
         auto next_iteration_time = begin;
 
+        realtime_controller_->setup(update_rate);
         if (upstream_enabled) {
-            realtime_controller_->setup(500.0);
-
             const uint64_t old_version = pdo_read_result_version_.load(std::memory_order::relaxed);
             while (!token.stop_requested()) {
                 pdo_read_async_unchecked();
@@ -554,41 +558,33 @@ private:
                     break;
             }
 
-            bool upstream = true;
             while (!token.stop_requested()) {
-                if (upstream)
-                    pdo_read_async_unchecked();
-                else {
-                    device::IRealtimeController::JointPositions positions;
-                    for (int i = 0; i < 5; i++)
-                        for (int j = 0; j < 4; j++) {
-                            auto& value = positions.value[i][j];
-                            value = extract_raw_position(
-                                pdo_read_result_[i][j].load(std::memory_order::relaxed));
-                            if (j == 0 && i != 0)
-                                value = -value;
-                        }
+                device::IRealtimeController::JointPositions positions;
+                for (int i = 0; i < 5; i++)
+                    for (int j = 0; j < 4; j++) {
+                        auto& value = positions.value[i][j];
+                        value = extract_raw_position(
+                            pdo_read_result_[i][j].load(std::memory_order::relaxed));
+                        if (j == 0 && i != 0)
+                            value = -value;
+                    }
 
-                    auto target_positions = realtime_controller_->step(&positions);
+                auto target_positions = realtime_controller_->step(&positions);
 
-                    pdo_write_async_unchecked(
-                        target_positions.value,
-                        static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                                  next_iteration_time - begin)
-                                                  .count()));
-                }
+                pdo_write_async_unchecked(
+                    true, target_positions.value,
+                    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                              next_iteration_time - begin)
+                                              .count()));
 
-                upstream = !upstream;
                 next_iteration_time += update_period;
                 std::this_thread::sleep_until(next_iteration_time);
             }
         } else {
-            realtime_controller_->setup(1000.0);
-
             while (!token.stop_requested()) {
                 auto target_positions = realtime_controller_->step(nullptr);
                 pdo_write_async_unchecked(
-                    target_positions.value,
+                    false, target_positions.value,
                     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
                                               next_iteration_time - begin)
                                               .count()));
@@ -597,6 +593,24 @@ private:
                 std::this_thread::sleep_until(next_iteration_time);
             }
         }
+    }
+
+    template <typename Struct>
+    static const Struct&
+        read_frame_struct(std::byte*& pointer, const std::byte* sentinel, const char* description) {
+        static_assert(alignof(Struct) == 1);
+        const std::size_t required = sizeof(Struct);
+        const std::ptrdiff_t remaining = sentinel - pointer;
+        if (remaining < static_cast<std::ptrdiff_t>(required)) {
+            throw std::runtime_error(
+                std::format(
+                    "{} truncated: requires {} bytes, but {} remain", description, required,
+                    remaining));
+        }
+
+        const auto& data = *reinterpret_cast<const Struct*>(pointer);
+        pointer += required;
+        return data;
     }
 
     static void read_async_unchecked_internal(
@@ -626,11 +640,12 @@ private:
         new (buffer) protocol::pdo::Read{};
         default_transmit_buffer_.trigger_transmission();
     }
-
-    void pdo_write_async_unchecked(const double (&target_positions)[5][4], uint32_t timestamp) {
+    void pdo_write_async_unchecked(
+        bool upstream_enabled, const double (&target_positions)[5][4], uint32_t timestamp) {
         std::byte* buffer =
             fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
+        payload->enable_read = upstream_enabled;
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {

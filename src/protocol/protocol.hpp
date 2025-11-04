@@ -92,17 +92,23 @@ PACKED_STRUCT(WriteResultError {
 
 namespace pdo {
 
-PACKED_STRUCT(Read { uint16_t pdo_id = 0x0100; });
-
-PACKED_STRUCT(ReadResult {
-    uint16_t pdo_id;
-    int32_t positions[5][4];
+PACKED_STRUCT(Read {
+    uint8_t enable_write = 0;
+    uint8_t enable_read = 1;
 });
 
 PACKED_STRUCT(Write {
-    uint16_t pdo_id = 0x0001;
+    uint8_t enable_write = 1;
+    uint8_t enable_read; // 0 or 1
     int32_t target_positions[5][4];
     uint32_t timestamp;
+});
+
+// Only response when `enable_read == 1`
+PACKED_STRUCT(CommandResult {
+    uint8_t write_executed;
+    uint8_t read_executed;
+    int32_t positions[5][4];
 });
 
 }; // namespace pdo
