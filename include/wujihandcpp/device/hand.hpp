@@ -97,6 +97,12 @@ public:
         init_storage_info(mask);
 
         try {
+            auto version = data::FirmwareVersionData{read<data::hand::FirmwareVersion>()};
+            if (version < data::FirmwareVersionData{3, 0, 0})
+                throw std::runtime_error(
+                    "The firmware version (" + version.to_string()
+                    + ") is outdated. Please contact after-sales service for an upgrade.");
+
             write<data::joint::Enabled>(false);
             Latch latch;
             write_async<data::joint::ControlMode>(latch, 6);

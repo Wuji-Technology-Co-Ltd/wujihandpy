@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
 #include "wujihandcpp/protocol/handler.hpp"
+#include "wujihandcpp/utility/api.hpp"
 
 namespace wujihandcpp {
 namespace data {
@@ -48,5 +50,65 @@ struct WriteOnlyData {
     }
 };
 
+struct alignas(uint32_t) FirmwareVersionData {
+    FirmwareVersionData() = default;
+
+    explicit FirmwareVersionData(uint32_t version) {
+        std::memcpy(this, &version, sizeof(FirmwareVersionData));
+    }
+
+    constexpr FirmwareVersionData(uint8_t major, uint8_t minor, uint8_t patch, char pre = '\0')
+        : major(major)
+        , minor(minor)
+        , patch(patch)
+        , pre(pre) {}
+
+    uint8_t major;
+    uint8_t minor;
+    uint8_t patch;
+    char pre;
+
+    bool operator==(const FirmwareVersionData& other) const {
+        return major == other.major && minor == other.minor && patch == other.patch
+            && pre == other.pre;
+    }
+
+    bool operator!=(const FirmwareVersionData& other) const { return !(*this == other); }
+
+    bool operator<(const FirmwareVersionData& other) const {
+        if (major != other.major)
+            return major < other.major;
+        if (minor != other.minor)
+            return minor < other.minor;
+        if (patch != other.patch)
+            return patch < other.patch;
+        return pre < other.pre;
+    }
+
+    bool operator>(const FirmwareVersionData& other) const { return other < *this; }
+
+    bool operator<=(const FirmwareVersionData& other) const {
+        return *this < other || *this == other;
+    }
+
+    bool operator>=(const FirmwareVersionData& other) const {
+        return *this > other || *this == other;
+    }
+
+    std::string to_string() const {
+        std::string result;
+        result.resize(string_length());
+        write_to_string(&result[0]);
+        return result;
+    }
+
+private:
+    WUJIHANDCPP_API size_t string_length() const;
+
+    WUJIHANDCPP_API void write_to_string(char* dst) const;
+};
+static_assert(sizeof(FirmwareVersionData) == 4, "");
+static_assert(std::is_trivial_v<FirmwareVersionData>, "");
+static_assert(std::is_standard_layout_v<FirmwareVersionData>, "");
 } // namespace data
 } // namespace wujihandcpp
