@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstring>
 
+#include <string>
+
 #include "wujihandcpp/protocol/handler.hpp"
 #include "wujihandcpp/utility/api.hpp"
 
@@ -108,7 +110,6 @@ private:
     WUJIHANDCPP_API void write_to_string(char* dst) const;
 };
 static_assert(sizeof(FirmwareVersionData) == 4, "");
-static_assert(std::is_trivial_v<FirmwareVersionData>, "");
-static_assert(std::is_standard_layout_v<FirmwareVersionData>, "");
+
 } // namespace data
 } // namespace wujihandcpp

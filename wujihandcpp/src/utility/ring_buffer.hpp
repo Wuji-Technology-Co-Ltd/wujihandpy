@@ -4,14 +4,25 @@
 
 #include <algorithm>
 #include <atomic>
+#include <limits>
+#include <memory>
+#include <new>
+#include <utility>
 
 namespace wujihandcpp::utility {
 
 // Lock-free Single-Producer/Single-Consumer (SPSC) ring buffer
-// Inspired by Linux kfifo. Avoids CAS operations for zero-contention.
+// Inspired by Linux kfifo.
 template <typename T>
 class RingBuffer {
 public:
+    /*!
+     * \brief Construct an SPSC ring buffer
+     * \param size Minimum capacity requested. Actual capacity is rounded up
+     *        to the next power of two and clamped to at least 2.
+     * \note This data structure is single-producer/single-consumer. Only one
+     *       thread may push, and only one thread may pop, at a time.
+     */
     constexpr explicit RingBuffer(size_t size) {
         if (size <= 2)
             size = 2;
@@ -21,38 +32,54 @@ public:
         storage_ = new Storage[size];
     };
 
+    RingBuffer(const RingBuffer&) = delete;
+    RingBuffer& operator=(const RingBuffer&) = delete;
+    RingBuffer(RingBuffer&&) = delete;
+    RingBuffer& operator=(RingBuffer&&) = delete;
+
+    /*!
+     * \brief Destructor
+     * Destroys all elements remaining in the buffer and frees storage.
+     */
     ~RingBuffer() {
         clear();
         delete[] storage_;
     }
 
+    /*!
+     * \brief Capacity of the ring buffer
+     * \return Total number of slots (power of two)
+     */
     size_t max_size() const { return mask + 1; }
 
     /*!
-     * \brief Check how many elements can be read from the buffer
-     * \return Number of elements that can be read
+     * \brief Number of elements currently readable
+     * \return Count of elements available to the consumer
+     * \note Uses acquire on producer index and relaxed on consumer index to
+     *       ensure visibility of constructed elements to the consumer.
      */
     size_t readable() const {
         return in_.load(std::memory_order::acquire) - out_.load(std::memory_order::relaxed);
     }
 
     /*!
-     * \brief Check how many elements can be written into the buffer
-     * \return Number of free slots that can be be written
+     * \brief Number of free slots for producer
+     * \return Count of slots available to write
+     * \note Uses relaxed on producer index and acquire on consumer index to
+     *       avoid overrun while allowing the producer to run without contention.
      */
-    size_t writeable() const {
+    size_t writable() const {
         return max_size()
              - (in_.load(std::memory_order::relaxed) - out_.load(std::memory_order::acquire));
     }
 
     /*!
-     * \brief Gets the first element in the buffer on consumed side
-     *
-     * It is safe to use and modify item contents only on consumer side
-     *
-     * \return Pointer to first element, nullptr if buffer was empty
+     * \brief Peek the first element (consumer side)
+     * \return Pointer to the first element, or nullptr if empty
+     * \warning Do not call from producer thread. The pointer remains valid
+     *          until the element is popped or overwritten.
      */
-    T* front() {
+    T* peek_front() {
         auto out = out_.load(std::memory_order::relaxed);
 
         if (out == in_.load(std::memory_order::acquire))
@@ -62,24 +89,31 @@ public:
     }
 
     /*!
-     * \brief Gets the last element in the buffer on consumed side
-     *
-     * It is safe to use and modify item contents only on consumer side
-     *
-     * \return Pointer to last element, nullptr if buffer was empty
+     * \brief Peek the last produced element (consumer side)
+     * \return Pointer to the last element, or nullptr if empty
+     * \warning Do not call from producer thread. The pointer remains valid
+     *          until the element is popped or overwritten.
      */
-    T* back() {
+    T* peek_back() {
         auto in = in_.load(std::memory_order::acquire);
 
         if (in == out_.load(std::memory_order::relaxed))
             return nullptr;
         else
-            return std::launder(reinterpret_cast<T*>(storage_[in & mask].data));
+            return std::launder(reinterpret_cast<T*>(storage_[(in - 1) & mask].data));
     }
 
+    /*!
+     * \brief Batch-construct elements at the tail (producer)
+     * \tparam F Functor with signature `void(std::byte* storage)` that constructs
+     *         a `T` in-place via placement-new.
+     * \param count Maximum number of elements to construct (defaults to as many as fit)
+     * \return Number of elements actually constructed
+     * \note Producer-only. Publishes with release semantics.
+     */
     template <typename F>
-    requires requires(F f, std::byte* storage) { f(storage); }
-    size_t emplace_back_multi(F construct_functor, size_t count = -1) {
+    requires requires(F f, std::byte* storage) { f(storage); } size_t
+        emplace_back_multi(F construct_functor, size_t count = std::numeric_limits<size_t>::max()) {
         auto in = in_.load(std::memory_order::relaxed);
         auto out = out_.load(std::memory_order::acquire);
 
@@ -98,45 +132,59 @@ public:
         for (size_t i = 0; i < count - slice; i++)
             construct_functor(storage_[i].data);
 
-        std::atomic_signal_fence(std::memory_order::release);
         in_.store(in + count, std::memory_order::release);
-        in_.notify_one();
 
         return count;
     }
 
+    /*!
+     * \brief Construct one element in-place at the tail (producer)
+     * \return true if pushed, false if buffer is full
+     */
     template <typename... Args>
     bool emplace_back(Args&&... args) {
         return emplace_back_multi(
             [&](std::byte* storage) { new (storage) T{std::forward<Args>(args)...}; }, 1);
     }
 
+    /*!
+     * \brief Batch-push using a generator (producer)
+     * \tparam F Functor returning a `T` to be stored
+     * \param count Maximum number to generate/push
+     * \return Number of elements actually pushed
+     */
     template <typename F>
-    requires requires(F f) { T{f()}; } size_t push_back_multi(F generator, size_t count = -1) {
+    requires requires(F f) { T{f()}; }
+    size_t push_back_multi(F generator, size_t count = std::numeric_limits<size_t>::max()) {
         return emplace_back_multi([&](std::byte* storage) { new (storage) T{generator()}; }, count);
     }
 
+    /*!
+     * \brief Push a copy of value (producer)
+     * \return true if pushed, false if buffer is full
+     */
     bool push_back(const T& value) {
         return emplace_back_multi([&](std::byte* storage) { new (storage) T{value}; }, 1);
     }
+    /*!
+     * \brief Push by moving value (producer)
+     * \return true if pushed, false if buffer is full
+     */
     bool push_back(T&& value) {
         return emplace_back_multi(
             [&](std::byte* storage) { new (storage) T{std::move(value)}; }, 1);
     }
 
-    void wait_data() {
-        auto out = out_.load(std::memory_order_relaxed);
-        auto in = in_.load(std::memory_order_acquire);
-
-        if (in != out)
-            return;
-
-        in_.wait(in, std::memory_order_acquire);
-    }
-
+    /*!
+     * \brief Batch-pop elements from the head (consumer)
+     * \tparam F Functor with signature `void(T)` receiving moved-out elements
+     * \param count Maximum number of elements to pop (defaults to all available)
+     * \return Number of elements actually popped
+     * \note Consumer-only. Consumes with release on `out_` and destroys elements.
+     */
     template <typename F>
     requires requires(F f, T t) { f(std::move(t)); }
-    size_t pop_front_multi(F callback_functor, size_t count = -1) {
+    size_t pop_front_multi(F callback_functor, size_t count = std::numeric_limits<size_t>::max()) {
         auto in = in_.load(std::memory_order::acquire);
         auto out = out_.load(std::memory_order::relaxed);
 
@@ -159,26 +207,33 @@ public:
         for (size_t i = 0; i < count - slice; i++)
             process(storage_[i].data);
 
-        std::atomic_signal_fence(std::memory_order::release);
         out_.store(out + count, std::memory_order::release);
 
         return count;
     }
 
+    /*!
+     * \brief Pop one element (consumer)
+     * \return true if an element was popped, false if empty
+     */
     template <typename F>
     requires requires(F f, T t) { f(std::move(t)); } bool pop_front(F&& callback_functor) {
         return pop_front_multi(std::forward<F>(callback_functor), 1);
     }
 
     /*!
-     * \brief Clear buffer
-     * \return Number of elements that be erased
+     * \brief Clear the buffer by consuming all elements
+     * \return Number of elements that were erased
      */
     size_t clear() {
         return pop_front_multi([](T&&) {});
     }
 
 private:
+    /*!
+     * \brief Round up to next power of two
+     * \note Assumes n > 0. Handles 32/64-bit size_t.
+     */
     constexpr static size_t round_up_to_next_power_of_2(size_t n) {
         n--;
         n |= n >> 1;
@@ -186,17 +241,18 @@ private:
         n |= n >> 4;
         n |= n >> 8;
         n |= n >> 16;
-        n |= n >> 32;
+        if constexpr (sizeof(size_t) > 4)
+            n |= n >> 32;
         n++;
         return n;
     }
 
     size_t mask;
-
-    std::atomic<size_t> in_{0}, out_{0};
     struct Storage {
         alignas(T) std::byte data[sizeof(T)];
     }* storage_;
+
+    std::atomic<size_t> in_{0}, out_{0};
 };
 
 }; // namespace wujihandcpp::utility

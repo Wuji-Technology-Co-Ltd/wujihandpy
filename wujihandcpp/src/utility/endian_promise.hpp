@@ -12,9 +12,12 @@ namespace wujihandcpp::utility {
 template <typename T>
 requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
 [[nodiscard]] inline T swap_endian(const T& value) noexcept {
-    T result;
+    static_assert(
+        sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8,
+        "Endian swap is only defined for 2, 4, and 8-byte types");
 
-    if constexpr (sizeof(T) == 8) {        // 64-bit
+    T result;
+    if constexpr (sizeof(T) == 8) { // 64-bit
         ((uint8_t*)&result)[0] = ((uint8_t*)&value)[7];
         ((uint8_t*)&result)[1] = ((uint8_t*)&value)[6];
         ((uint8_t*)&result)[2] = ((uint8_t*)&value)[5];
@@ -32,7 +35,7 @@ requires(std::is_integral_v<T> || std::is_floating_point_v<T>)
         ((uint8_t*)&result)[0] = ((uint8_t*)&value)[1];
         ((uint8_t*)&result)[1] = ((uint8_t*)&value)[0];
     } else {
-        return 0;                          // Endian swap is only defined for 2, 4, and 8-byte types
+        return 0;
     }
 
     return result;

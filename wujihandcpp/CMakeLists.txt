@@ -79,8 +79,6 @@ endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE BUILDING_WUJIHANDCPP)
 
-target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${LIBUSB_INCLUDE_DIRS})
-
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
 

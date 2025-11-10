@@ -23,7 +23,7 @@ WUJIHANDCPP_API void Latch::count_down(bool success) noexcept {
 
     const int old = waiting_count_.fetch_sub(1, std::memory_order_release);
     if (old - 1 == 0)
-        waiting_count_.notify_one();
+        waiting_count_.notify_all();
 }
 
 } // namespace wujihandcpp::device

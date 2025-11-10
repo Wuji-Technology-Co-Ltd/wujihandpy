@@ -40,8 +40,13 @@ class Hand : public DataOperator<Hand> {
         ControllerOperator& operator=(ControllerOperator&&) = delete;
 
         ~ControllerOperator() {
-            if (controller_)
+            if (!controller_)
+                return;
+            try {
                 hand_.detach_realtime_controller();
+            } catch (...) {
+                // TODO: Add log here
+            }
         }
 
         void set_joint_target_position(const double (&positions)[5][4]) {
@@ -71,8 +76,13 @@ class Hand : public DataOperator<Hand> {
         ControllerOperator& operator=(ControllerOperator&&) = delete;
 
         ~ControllerOperator() {
-            if (controller_)
+            if (!controller_)
+                return;
+            try {
                 hand_.detach_realtime_controller();
+            } catch (...) {
+                // TODO: Add log here
+            }
         }
 
         auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
@@ -173,7 +183,9 @@ public:
 
         revert_disabled_joints(last_enabled);
 
-        handler_.attach_realtime_controller(controller.release(), enable_upstream);
+        handler_.attach_realtime_controller(controller.get(), enable_upstream);
+        auto ignore = controller.release();
+        (void)ignore;
     }
 
     std::unique_ptr<IRealtimeController> detach_realtime_controller() {
