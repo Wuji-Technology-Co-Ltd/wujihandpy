@@ -1,0 +1,8 @@
+build/
+package-build/
+
+# Clangd cache files
+.cache/
+
+# VSCode configure files
+.vscode/
