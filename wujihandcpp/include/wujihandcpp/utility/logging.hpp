@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "wujihandcpp/utility/api.hpp"
 
 namespace wujihandcpp {
@@ -22,6 +24,8 @@ WUJIHANDCPP_API void set_log_to_file(bool value) noexcept;
 WUJIHANDCPP_API void set_log_level(Level value) noexcept;
 
 WUJIHANDCPP_API void set_log_path(const char* value);
+
+WUJIHANDCPP_API void log(Level level, const char* msg, size_t length) noexcept;
 
 WUJIHANDCPP_API void flush() noexcept;
 

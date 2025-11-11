@@ -5,8 +5,8 @@
 #include <libusb.h>
 
 #include "driver/driver.hpp"
+#include "logging/logging.hpp"
 #include "utility/cross_os.hpp"
-#include "utility/logging.hpp"
 #include "utility/ring_buffer.hpp"
 
 namespace wujihandcpp::driver {
@@ -102,7 +102,7 @@ public:
         { f(free_size) } -> std::convertible_to<int>;
     } std::byte* try_fetch_buffer(const F1& check_transfer, const F2& get_actual_size) {
         while (true) {
-            auto front = free_transfers_.front();
+            auto front = free_transfers_.peek_front();
             if (!front) [[unlikely]] {
                 if (!transfers_all_busy_)
                     logger_.error("Failed to fetch free buffer: All transfers are busy!");
@@ -129,7 +129,7 @@ public:
     }
 
     bool trigger_transmission(bool allow_empty = false) {
-        auto front = free_transfers_.front();
+        auto front = free_transfers_.peek_front();
         if (!front)
             return false;
         if (!allow_empty && (*front)->length <= prefill_size_)

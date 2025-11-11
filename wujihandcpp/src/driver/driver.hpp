@@ -10,9 +10,9 @@
 
 #include <libusb.h>
 
+#include "logging/logging.hpp"
 #include "utility/cross_os.hpp"
 #include "utility/final_action.hpp"
-#include "utility/logging.hpp"
 
 namespace wujihandcpp::driver {
 
