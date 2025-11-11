@@ -5,8 +5,8 @@
 #include <libusb.h>
 
 #include "driver/driver.hpp"
+#include "logging/logging.hpp"
 #include "utility/cross_os.hpp"
-#include "utility/logging.hpp"
 #include "utility/ring_buffer.hpp"
 
 namespace wujihandcpp::driver {
