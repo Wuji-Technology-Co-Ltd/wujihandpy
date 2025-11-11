@@ -16,8 +16,8 @@ class Joint;
 namespace data {
 namespace joint {
 
-struct HardwareVersion : ReadOnlyData<device::Joint, 0x01, 1, uint32_t> {};
-struct HardwareDate : ReadOnlyData<device::Joint, 0x01, 2, uint32_t> {};
+struct FirmwareVersion : ReadOnlyData<device::Joint, 0x01, 1, uint32_t> {};
+struct FirmwareDate : ReadOnlyData<device::Joint, 0x01, 2, uint32_t> {};
 
 struct ControlMode : WriteOnlyData<device::Joint, 0x02, 1, uint16_t> {};
 

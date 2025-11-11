@@ -79,8 +79,8 @@ PYBIND11_MODULE(_core, m) {
     auto joint = py::class_<Joint>(m, "Joint");
     finger.def("joint", &Finger::joint, py::arg("index"), py::keep_alive<0, 1>());
 
-    register_py_interface<data::joint::HardwareVersion>("hardware_version", hand, finger, joint);
-    register_py_interface<data::joint::HardwareDate>("hardware_date", hand, finger, joint);
+    register_py_interface<data::joint::FirmwareVersion>("firmware_version", hand, finger, joint);
+    register_py_interface<data::joint::FirmwareDate>("firmware_date", hand, finger, joint);
     register_py_interface<data::joint::ControlMode>("control_mode", hand, finger, joint);
     register_py_interface<data::joint::SinLevel>("sin_level", hand, finger, joint);
     register_py_interface<data::joint::CurrentLimit>("current_limit", hand, finger, joint);
