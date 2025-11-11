@@ -21,8 +21,8 @@
 
 #include "driver/async_transmit_buffer.hpp"
 #include "driver/driver.hpp"
+#include "logging/logging.hpp"
 #include "protocol/protocol.hpp"
-#include "utility/logging.hpp"
 
 namespace wujihandcpp::protocol {
 
