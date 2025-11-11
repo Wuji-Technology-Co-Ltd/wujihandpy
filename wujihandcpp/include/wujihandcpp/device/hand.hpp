@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <stdexcept>
+#include <string>
 
 #include "wujihandcpp/data/hand.hpp"
 #include "wujihandcpp/data/joint.hpp"
@@ -12,6 +13,7 @@
 #include "wujihandcpp/device/data_tuple.hpp"
 #include "wujihandcpp/device/finger.hpp"
 #include "wujihandcpp/protocol/handler.hpp"
+#include "wujihandcpp/utility/logging.hpp"
 
 namespace wujihandcpp {
 namespace device {
@@ -118,10 +120,57 @@ public:
             write_async<data::joint::ControlMode>(latch, 6);
             write_async<data::joint::CurrentLimit>(latch, 1000);
             latch.wait();
+
+            log_firmware_version();
         } catch (const TimeoutError&) {
             throw TimeoutError("Hand initialization timed out: joint configuration incomplete");
         }
     };
+
+    void log_firmware_version() {
+        Latch latch;
+        read_async<data::hand::FirmwareVersion>(latch);
+        read_async<data::joint::FirmwareVersion>(latch);
+        latch.wait();
+
+        std::string hardware_msg =
+            "Using hardware version: "
+            + data::FirmwareVersionData{get<data::hand::FirmwareVersion>()}.to_string() + " & ";
+
+        uint32_t joint_version = finger(0).joint(0).get<data::joint::FirmwareVersion>();
+        bool joint_version_consistent = true;
+        for (int i = 0; i < 5; i++)
+            for (int j = 0; j < 4; j++)
+                joint_version_consistent =
+                    joint_version_consistent
+                    && joint_version == finger(i).joint(j).get<data::joint::FirmwareVersion>();
+
+        if (joint_version_consistent) {
+            hardware_msg += data::FirmwareVersionData{joint_version}.to_string();
+            logging::log(logging::Level::INFO, hardware_msg.c_str(), hardware_msg.size());
+        } else {
+            hardware_msg += "[Matrix]";
+            logging::log(logging::Level::INFO, hardware_msg.c_str(), hardware_msg.size());
+
+            std::string joint_hardware_msg;
+            for (int i = 0; i < 5; i++) {
+                joint_hardware_msg.clear();
+                for (int j = 0; j < 4; j++) {
+                    joint_hardware_msg += "  ";
+                    joint_hardware_msg +=
+                        data::FirmwareVersionData{
+                            finger(i).joint(j).get<data::joint::FirmwareVersion>()}
+                            .to_string();
+                }
+                joint_hardware_msg += "\n";
+                logging::log(
+                    logging::Level::INFO, joint_hardware_msg.c_str(), joint_hardware_msg.size());
+            }
+
+            const char warning_msg[] = "Inconsistent driver board firmware version detected";
+            logging::log(logging::Level::WARN, warning_msg, sizeof(warning_msg) - 1);
+        }
+    }
 
     Finger finger_thumb() { return finger(0); }
     Finger finger_index() { return finger(1); }
