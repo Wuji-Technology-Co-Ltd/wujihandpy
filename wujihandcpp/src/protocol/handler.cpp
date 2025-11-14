@@ -19,33 +19,28 @@
 #include <wujihandcpp/protocol/handler.hpp>
 #include <wujihandcpp/utility/api.hpp>
 
-#include "driver/async_transmit_buffer.hpp"
-#include "driver/driver.hpp"
 #include "logging/logging.hpp"
 #include "protocol/protocol.hpp"
+#include "transport/transport.hpp"
 
 namespace wujihandcpp::protocol {
 
-class Handler::Impl : driver::Driver<Impl> {
-    friend class Driver<Impl>;
-    friend class AsyncTransmitBuffer<protocol::Header>;
-
+class Handler::Impl {
 public:
-    explicit Impl(
-        uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
-        size_t storage_unit_count)
-        : Driver(usb_vid, usb_pid, serial_number)
-        , logger_(logging::get_logger())
-        , default_transmit_buffer_(*this, buffer_transfer_count)
-        , tick_thread_transmit_buffer_(*this, buffer_transfer_count)
-        , event_thread_([this]() { handle_events(); })
+    explicit Impl(std::unique_ptr<transport::ITransport> transport, size_t storage_unit_count)
+        : logger_(logging::get_logger())
         , operation_thread_id_(std::this_thread::get_id())
         , storage_unit_count_(storage_unit_count)
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
-        , tick_thread_(
-              [this](const std::stop_token& stop_token) { tick_thread_main(stop_token); }) {}
+        , transport_(std::move(transport))
+        , sdo_thread_([this](const std::stop_token& stop_token) { tick_thread_main(stop_token); }) {
 
-    ~Impl() { stop_handling_events(); };
+        transport_->receive([this](const std::byte* buffer, size_t size) {
+            receive_transfer_completed_callback(buffer, size);
+        });
+    }
+
+    ~Impl() = default;
 
     void init_storage_info(int storage_id, StorageInfo info) {
         storage_[storage_id].info = info;
@@ -125,18 +120,17 @@ public:
             throw std::runtime_error("A realtime controller is already attached.");
 
         realtime_controller_ = std::move(guard);
-        realtime_controller_thread_ =
-            std::jthread{[this, enable_upstream](const std::stop_token& stop_token) {
-                realtime_controller_thread_main(stop_token, enable_upstream);
-            }};
+        pdo_thread_ = std::jthread{[this, enable_upstream](const std::stop_token& stop_token) {
+            realtime_controller_thread_main(stop_token, enable_upstream);
+        }};
     }
 
     device::IRealtimeController* detach_realtime_controller() {
         if (!realtime_controller_)
             throw std::runtime_error("No realtime controller attached.");
 
-        realtime_controller_thread_.request_stop();
-        realtime_controller_thread_.join();
+        pdo_thread_.request_stop();
+        pdo_thread_.join();
 
         return realtime_controller_.release();
     }
@@ -191,6 +185,72 @@ private:
     };
     static_assert(sizeof(StorageUnit) == 64);
 
+    class TransmitHelper {
+    public:
+        TransmitHelper(transport::ITransport& transport, uint8_t header_type)
+            : logger_(logging::get_logger())
+            , transport_(transport)
+            , header_type_(header_type) {
+            flush();
+        };
+
+        std::byte* fetch_buffer(int size) {
+            if (current_ + size + sizeof(protocol::CrcCheck) >= end_)
+                flush();
+
+            auto current = current_;
+            current_ += size;
+            return current;
+        }
+
+        void flush() {
+            if (buffer_) {
+                auto begin = buffer_->data();
+                auto size = current_ - begin;
+
+                auto compressed_frame_length =
+                    static_cast<uint16_t>((size + (int)sizeof(protocol::CrcCheck) - 1) / 16 + 1);
+                auto padded_length = 16 * compressed_frame_length;
+                std::memset(current_, 0, padded_length - size);
+
+                auto& header = *reinterpret_cast<protocol::Header*>(begin);
+                struct {
+                    uint16_t max_receive_window : 10;
+                    uint16_t frame_length       : 6;
+                } description{
+                    .max_receive_window = 0xA0,
+                    .frame_length = (uint8_t)(compressed_frame_length - 1)};
+                header.description = std::bit_cast<int16_t>(description);
+
+                logger_.trace(
+                    "TX [{} bytes] {:Xp}", padded_length,
+                    spdlog::to_hex(begin, begin + padded_length));
+
+                transport_.transmit(std::move(buffer_), padded_length);
+            }
+
+            buffer_ = transport_.request_transmit_buffer();
+            if (!buffer_)
+                throw std::runtime_error{"No buffer available!"};
+
+            current_ = buffer_->data();
+            end_ = current_ + buffer_->size();
+
+            auto& header = *new (current_) protocol::Header{};
+            header.type = header_type_;
+            current_ += sizeof(header);
+        }
+
+        logging::Logger& logger_;
+
+        transport::ITransport& transport_;
+        const uint8_t header_type_;
+
+        std::unique_ptr<transport::IBuffer> buffer_ = nullptr;
+        std::byte *current_, *end_;
+    };
+
+private:
     void operation_thread_check() const {
         if (operation_thread_id_ == std::thread::id{})
             return;
@@ -243,108 +303,29 @@ private:
         return angle * (2 * std::numbers::pi / std::numeric_limits<int32_t>::max());
     }
 
-    static std::byte*
-        fetch_sdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer, int size) {
-        auto buffer = transmit_buffer.try_fetch_buffer(
-            [size](int free_size, libusb_transfer* transfer) {
-                if (free_size < size + int(sizeof(protocol::CrcCheck)))
-                    return false;
+    void receive_transfer_completed_callback(const std::byte* buffer, size_t size) {
+        if (logger_.should_log(logging::Level::TRACE))
+            logger_.trace("RX [{} bytes] {:Xp}", size, spdlog::to_hex(buffer, buffer + size));
 
-                auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
-                if (header.type == 0)
-                    header.type = 0x21;
-                else if (header.type != 0x21)
-                    return false;
-
-                return true;
-            },
-            [size](int) { return size; });
-        if (!buffer)
-            throw std::runtime_error{"No buffer available!"};
-
-        return buffer;
-    }
-
-    static std::byte*
-        fetch_pdo_buffer(AsyncTransmitBuffer<protocol::Header>& transmit_buffer, int size) {
-        auto buffer = transmit_buffer.try_fetch_buffer(
-            [size](int free_size, libusb_transfer* transfer) {
-                if (free_size < size + int(sizeof(protocol::CrcCheck)))
-                    return false;
-
-                auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
-                if (header.type == 0)
-                    header.type = 0x11;
-                else if (header.type != 0x11)
-                    return false;
-
-                return true;
-            },
-            [size](int) { return size; });
-        if (!buffer)
-            throw std::runtime_error{"No buffer available!"};
-
-        return buffer;
-    }
-
-    static void before_submitting_transmit_transfer(libusb_transfer* transfer) {
-        auto compressed_frame_length = static_cast<uint16_t>(
-            (transfer->length + (int)sizeof(protocol::CrcCheck) - 1) / 16 + 1);
-        auto padded_length = 16 * compressed_frame_length;
-        std::memset(&transfer->buffer[transfer->length], 0, padded_length - transfer->length);
-        transfer->length = padded_length;
-
-        auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
-        struct {
-            uint16_t max_receive_window : 10;
-            uint16_t frame_length       : 6;
-        } description{
-            .max_receive_window = 0xA0, .frame_length = (uint8_t)(compressed_frame_length - 1)};
-        header.description = std::bit_cast<int16_t>(description);
-    }
-
-    void transmit_transfer_completed_callback(libusb_transfer* transfer) {
-        if (logger_.should_log(logging::Level::TRACE)) {
-            const auto* begin = transfer->buffer;
-            const auto* end = begin + transfer->actual_length;
-            logger_.trace(
-                "TX [{} bytes] {:Xp}", transfer->actual_length, spdlog::to_hex(begin, end));
-        }
-
-        auto& header = *reinterpret_cast<protocol::Header*>(transfer->buffer);
-        header.type = 0;
-    }
-
-    void receive_transfer_completed_callback(libusb_transfer* transfer) {
-        if (logger_.should_log(logging::Level::TRACE)) {
-            const auto* begin = transfer->buffer;
-            const auto* end = begin + transfer->actual_length;
-            logger_.trace(
-                "RX [{} bytes] {:Xp}", transfer->actual_length, spdlog::to_hex(begin, end));
-        }
-
-        auto pointer = reinterpret_cast<std::byte*>(transfer->buffer);
-        const auto sentinel = pointer + transfer->actual_length;
+        auto pointer = buffer;
+        auto sentinel = pointer + size;
 
         try {
-            const auto& header =
-                read_frame_struct<protocol::Header>(pointer, sentinel, "Frame header");
-
+            const auto& header = read_frame_struct<protocol::Header>(pointer, sentinel);
             if (header.type == 0x21)
                 read_sdo_frame(pointer, sentinel);
             else if (header.type == 0x11)
                 read_pdo_frame(pointer, sentinel);
+            else
+                throw std::runtime_error{std::format("Invalid header type: 0x{:02X}", header.type)};
         } catch (const std::runtime_error& ex) {
-            logger_.error("RX Frame parsing failed: {}", ex.what());
-            const auto* begin = transfer->buffer;
-            const auto* end = begin + transfer->actual_length;
+            logger_.error("RX Frame parsing failed at offset {}: {}", pointer - buffer, ex.what());
             logger_.error(
-                "RX Frame dump [{} bytes] {:Xp}", transfer->actual_length,
-                spdlog::to_hex(begin, end));
+                "RX Frame dump [{} bytes] {:Xp}", size, spdlog::to_hex(buffer, buffer + size));
         }
     }
 
-    void read_sdo_frame(std::byte*& pointer, const std::byte* sentinel) {
+    void read_sdo_frame(const std::byte*& pointer, const std::byte* sentinel) {
         while (pointer < sentinel) {
             auto control = static_cast<uint8_t>(*pointer);
             if (control == 0x35)
@@ -365,16 +346,14 @@ private:
                 break;
             else
                 throw std::runtime_error(
-                    std::format(
-                        "Invalid SDO command specifier: 0x{:02X} at offset {} from end", control,
-                        pointer - sentinel));
+                    std::format("Invalid SDO command specifier: 0x{:02X}", control));
         }
     }
 
     template <typename T>
-    void read_sdo_operation_read_success(std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = read_frame_struct<protocol::sdo::ReadResultSuccess<T>>(
-            pointer, sentinel, "SDO read success frame");
+    void read_sdo_operation_read_success(const std::byte*& pointer, const std::byte* sentinel) {
+        const auto& data =
+            read_frame_struct<protocol::sdo::ReadResultSuccess<T>>(pointer, sentinel);
 
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
@@ -402,14 +381,13 @@ private:
         }
     }
 
-    static void read_sdo_operation_read_failed(std::byte*& pointer, const std::byte* sentinel) {
-        read_frame_struct<protocol::sdo::ReadResultError>(
-            pointer, sentinel, "SDO read failure frame");
+    static void
+        read_sdo_operation_read_failed(const std::byte*& pointer, const std::byte* sentinel) {
+        read_frame_struct<protocol::sdo::ReadResultError>(pointer, sentinel);
     }
 
-    void read_sdo_operation_write_success(std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = read_frame_struct<protocol::sdo::WriteResultSuccess>(
-            pointer, sentinel, "SDO write success frame");
+    void read_sdo_operation_write_success(const std::byte*& pointer, const std::byte* sentinel) {
+        const auto& data = read_frame_struct<protocol::sdo::WriteResultSuccess>(pointer, sentinel);
 
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
@@ -423,9 +401,9 @@ private:
         }
     }
 
-    static void read_sdo_operation_write_failed(std::byte*& pointer, const std::byte* sentinel) {
-        read_frame_struct<protocol::sdo::WriteResultError>(
-            pointer, sentinel, "SDO write failure frame");
+    static void
+        read_sdo_operation_write_failed(const std::byte*& pointer, const std::byte* sentinel) {
+        read_frame_struct<protocol::sdo::WriteResultError>(pointer, sentinel);
     }
 
     StorageUnit& find_storage_by_index(uint16_t index, uint8_t sub_index) {
@@ -486,43 +464,36 @@ private:
                 } else if (
                     operation.state == Operation::State::READING
                     || operation.state == Operation::State::WRITING_CONFIRMING) {
-                    read_async_unchecked_internal(
-                        tick_thread_transmit_buffer_, storage.info.index, storage.info.sub_index);
+                    read_async_unchecked_internal(storage.info.index, storage.info.sub_index);
                 } else if (operation.state == Operation::State::WRITING) {
                     operation.state = Operation::State::WRITING_CONFIRMING;
                     storage.operation.store(operation, std::memory_order::relaxed);
                     if (storage.info.size == StorageInfo::Size::_1)
                         write_async_unchecked_internal(
-                            tick_thread_transmit_buffer_,
                             storage.value.load(std::memory_order::relaxed).as<uint8_t>(),
                             storage.info.index, storage.info.sub_index);
                     else if (storage.info.size == StorageInfo::Size::_2)
                         write_async_unchecked_internal(
-                            tick_thread_transmit_buffer_,
                             storage.value.load(std::memory_order::relaxed).as<uint16_t>(),
                             storage.info.index, storage.info.sub_index);
                     else if (storage.info.size == StorageInfo::Size::_4)
                         write_async_unchecked_internal(
-                            tick_thread_transmit_buffer_,
                             storage.value.load(std::memory_order::relaxed).as<uint32_t>(),
                             storage.info.index, storage.info.sub_index);
                     else if (storage.info.size == StorageInfo::Size::_8)
                         write_async_unchecked_internal(
-                            tick_thread_transmit_buffer_,
                             storage.value.load(std::memory_order::relaxed).as<uint64_t>(),
                             storage.info.index, storage.info.sub_index);
                 }
             }
-            fetch_sdo_buffer(tick_thread_transmit_buffer_, 0);
-            tick_thread_transmit_buffer_.trigger_transmission(true);
+            sdo_helper_.flush();
 
             std::this_thread::sleep_for(update_period);
         }
     }
 
-    void read_pdo_frame(std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = read_frame_struct<protocol::pdo::CommandResult>(
-            pointer, sentinel, "PDO CommandResult frame");
+    void read_pdo_frame(const std::byte*& pointer, const std::byte* sentinel) {
+        const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
 
         if (data.read_executed != 1)
             throw std::runtime_error(
@@ -596,16 +567,15 @@ private:
     }
 
     template <typename Struct>
-    static const Struct&
-        read_frame_struct(std::byte*& pointer, const std::byte* sentinel, const char* description) {
+    static const Struct& read_frame_struct(const std::byte*& pointer, const std::byte* sentinel) {
         static_assert(alignof(Struct) == 1);
         const std::size_t required = sizeof(Struct);
         const std::ptrdiff_t remaining = sentinel - pointer;
         if (remaining < static_cast<std::ptrdiff_t>(required)) {
             throw std::runtime_error(
                 std::format(
-                    "{} truncated: requires {} bytes, but {} remain", description, required,
-                    remaining));
+                    "{} truncated: requires {} bytes, but {} remain", typeid(Struct).name(),
+                    required, remaining));
         }
 
         const auto& data = *reinterpret_cast<const Struct*>(pointer);
@@ -613,9 +583,8 @@ private:
         return data;
     }
 
-    static void read_async_unchecked_internal(
-        AsyncTransmitBuffer<protocol::Header>& transmit_buffer, uint16_t index, uint8_t sub_index) {
-        std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Read));
+    void read_async_unchecked_internal(uint16_t index, uint8_t sub_index) {
+        std::byte* buffer = sdo_helper_.fetch_buffer(sizeof(protocol::sdo::Read));
         new (buffer) protocol::sdo::Read{
             .index = index,
             .sub_index = sub_index,
@@ -623,11 +592,8 @@ private:
     }
 
     template <protocol::is_type_erased_integral T>
-    void write_async_unchecked_internal(
-        AsyncTransmitBuffer<protocol::Header>& transmit_buffer, T value, uint16_t index,
-        uint8_t sub_index) {
-
-        std::byte* buffer = fetch_sdo_buffer(transmit_buffer, sizeof(protocol::sdo::Write<T>));
+    void write_async_unchecked_internal(T value, uint16_t index, uint8_t sub_index) {
+        std::byte* buffer = sdo_helper_.fetch_buffer(sizeof(protocol::sdo::Write<T>));
         new (buffer) protocol::sdo::Write<T>{
             .index = index,
             .sub_index = sub_index,
@@ -636,14 +602,13 @@ private:
     }
 
     void pdo_read_async_unchecked() {
-        std::byte* buffer = fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Read));
+        std::byte* buffer = pdo_helper_.fetch_buffer(sizeof(protocol::pdo::Read));
         new (buffer) protocol::pdo::Read{};
-        default_transmit_buffer_.trigger_transmission();
+        pdo_helper_.flush();
     }
     void pdo_write_async_unchecked(
         bool upstream_enabled, const double (&target_positions)[5][4], uint32_t timestamp) {
-        std::byte* buffer =
-            fetch_pdo_buffer(default_transmit_buffer_, sizeof(protocol::pdo::Write));
+        std::byte* buffer = pdo_helper_.fetch_buffer(sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
         payload->enable_read = upstream_enabled;
 
@@ -655,7 +620,7 @@ private:
             }
         payload->timestamp = timestamp;
 
-        default_transmit_buffer_.trigger_transmission();
+        pdo_helper_.flush();
     }
 
     template <size_t size>
@@ -667,10 +632,6 @@ private:
                 size == 4, uint32_t, std::conditional_t<size == 8, uint64_t, void>>>>;
 
     logging::Logger& logger_;
-
-    AsyncTransmitBuffer<protocol::Header> default_transmit_buffer_;
-    AsyncTransmitBuffer<protocol::Header> tick_thread_transmit_buffer_;
-    std::jthread event_thread_;
 
     std::thread::id operation_thread_id_;
 
@@ -684,19 +645,23 @@ private:
     };
     std::map<uint32_t, StorageUnit*> index_storage_map_;
 
-    std::jthread tick_thread_;
+    std::unique_ptr<transport::ITransport> transport_;
+    TransmitHelper sdo_helper_{*transport_, 0x21};
+    TransmitHelper pdo_helper_{*transport_, 0x11};
+
+    std::jthread sdo_thread_;
 
     std::atomic<int32_t> pdo_read_result_[5][4];
     std::atomic<uint64_t> pdo_read_result_version_ = 0;
 
     std::unique_ptr<device::IRealtimeController> realtime_controller_;
-    std::jthread realtime_controller_thread_;
+    std::jthread pdo_thread_;
 };
 
 WUJIHANDCPP_API Handler::Handler(
-    uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
-    size_t storage_unit_count) {
-    impl_ = new Impl{usb_vid, usb_pid, serial_number, buffer_transfer_count, storage_unit_count};
+    uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t storage_unit_count) {
+    impl_ = new Impl{
+        transport::create_usb_transport(usb_vid, usb_pid, serial_number), storage_unit_count};
 }
 
 WUJIHANDCPP_API Handler::~Handler() { delete impl_; }
