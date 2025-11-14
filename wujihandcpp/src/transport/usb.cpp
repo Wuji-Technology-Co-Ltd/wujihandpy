@@ -39,16 +39,22 @@ public:
     Usb& operator=(Usb&&) = delete;
 
     ~Usb() override {
-        stop_handling_events_.store(true, std::memory_order::relaxed);
+        {
+            std::lock_guard guard{transmit_transfer_push_mutex_};
+            stop_handling_events_.store(true, std::memory_order::relaxed);
+        }
+        free_transmit_transfers_.pop_front_n([](TransferWrapper* wrapper) { delete wrapper; });
 
         libusb_release_interface(libusb_device_handle_, target_interface_);
         if constexpr (utility::is_linux())
             libusb_attach_kernel_driver(libusb_device_handle_, 0);
+
+        // libusb_close() reliably cancels all pending transfers and invokes their callbacks,
+        // avoiding race conditions present in other cancellation methods
         libusb_close(libusb_device_handle_);
 
         if (event_thread_.joinable())
             event_thread_.join();
-        free_transmit_transfers_.pop_front_n([](TransferWrapper* wrapper) { delete wrapper; });
 
         libusb_exit(libusb_context_);
     }
@@ -56,7 +62,7 @@ public:
     std::unique_ptr<IBuffer> request_transmit_buffer() noexcept override {
         TransferWrapper* transfer = nullptr;
         {
-            std::lock_guard guard{transmit_transfer_request_mutex_};
+            std::lock_guard guard{transmit_transfer_pop_mutex_};
             free_transmit_transfers_.pop_front(
                 [&transfer](TransferWrapper*&& value) { transfer = value; });
         }
@@ -148,7 +154,7 @@ private:
             return false;
         }
 
-        // Libusb successfully initialized.
+        // Libusb successfully initialized
         close_device_handle.disable();
         exit_libusb.disable();
         return true;
@@ -361,6 +367,9 @@ private:
     }
 
     void usb_transmit_complete_callback(TransferWrapper* wrapper) {
+        // Share mutex with teardown so destructor can block callbacks before draining the queue
+        std::lock_guard guard{transmit_transfer_push_mutex_};
+
         if (stop_handling_events_.load(std::memory_order::relaxed)) [[unlikely]] {
             delete wrapper;
             return;
@@ -449,7 +458,7 @@ private:
     std::atomic<bool> stop_handling_events_ = false;
 
     utility::RingBuffer<TransferWrapper*> free_transmit_transfers_;
-    std::mutex transmit_transfer_request_mutex_;
+    std::mutex transmit_transfer_pop_mutex_, transmit_transfer_push_mutex_;
 
     std::function<void(const std::byte*, size_t size)> receive_callback_;
 };
