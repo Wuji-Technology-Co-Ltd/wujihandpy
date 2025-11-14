@@ -112,8 +112,8 @@ public:
      * \note Producer-only. Publishes with release semantics.
      */
     template <typename F>
-    requires requires(F f, std::byte* storage) { f(storage); } size_t
-        emplace_back_multi(F construct_functor, size_t count = std::numeric_limits<size_t>::max()) {
+    requires requires(F f, std::byte* storage) { f(storage); }
+    size_t emplace_back_n(F construct_functor, size_t count = std::numeric_limits<size_t>::max()) {
         auto in = in_.load(std::memory_order::relaxed);
         auto out = out_.load(std::memory_order::acquire);
 
@@ -143,7 +143,7 @@ public:
      */
     template <typename... Args>
     bool emplace_back(Args&&... args) {
-        return emplace_back_multi(
+        return emplace_back_n(
             [&](std::byte* storage) { new (storage) T{std::forward<Args>(args)...}; }, 1);
     }
 
@@ -155,8 +155,8 @@ public:
      */
     template <typename F>
     requires requires(F f) { T{f()}; }
-    size_t push_back_multi(F generator, size_t count = std::numeric_limits<size_t>::max()) {
-        return emplace_back_multi([&](std::byte* storage) { new (storage) T{generator()}; }, count);
+    size_t push_back_n(F generator, size_t count = std::numeric_limits<size_t>::max()) {
+        return emplace_back_n([&](std::byte* storage) { new (storage) T{generator()}; }, count);
     }
 
     /*!
@@ -164,15 +164,14 @@ public:
      * \return true if pushed, false if buffer is full
      */
     bool push_back(const T& value) {
-        return emplace_back_multi([&](std::byte* storage) { new (storage) T{value}; }, 1);
+        return emplace_back_n([&](std::byte* storage) { new (storage) T{value}; }, 1);
     }
     /*!
      * \brief Push by moving value (producer)
      * \return true if pushed, false if buffer is full
      */
     bool push_back(T&& value) {
-        return emplace_back_multi(
-            [&](std::byte* storage) { new (storage) T{std::move(value)}; }, 1);
+        return emplace_back_n([&](std::byte* storage) { new (storage) T{std::move(value)}; }, 1);
     }
 
     /*!
@@ -184,7 +183,7 @@ public:
      */
     template <typename F>
     requires requires(F f, T t) { f(std::move(t)); }
-    size_t pop_front_multi(F callback_functor, size_t count = std::numeric_limits<size_t>::max()) {
+    size_t pop_front_n(F callback_functor, size_t count = std::numeric_limits<size_t>::max()) {
         auto in = in_.load(std::memory_order::acquire);
         auto out = out_.load(std::memory_order::relaxed);
 
@@ -218,7 +217,7 @@ public:
      */
     template <typename F>
     requires requires(F f, T t) { f(std::move(t)); } bool pop_front(F&& callback_functor) {
-        return pop_front_multi(std::forward<F>(callback_functor), 1);
+        return pop_front_n(std::forward<F>(callback_functor), 1);
     }
 
     /*!
@@ -226,7 +225,7 @@ public:
      * \return Number of elements that were erased
      */
     size_t clear() {
-        return pop_front_multi([](T&&) {});
+        return pop_front_n([](T&&) {});
     }
 
 private:

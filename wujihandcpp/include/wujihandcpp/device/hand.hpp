@@ -104,7 +104,7 @@ public:
     explicit Hand(
         const char* serial_number = nullptr, int32_t usb_pid = -1, uint16_t usb_vid = 0x0483,
         uint32_t mask = 0)
-        : handler_(usb_vid, usb_pid, serial_number, 64, data_count()) {
+        : handler_(usb_vid, usb_pid, serial_number, data_count()) {
 
         init_storage_info(mask);
 
