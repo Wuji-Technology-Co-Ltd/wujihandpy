@@ -39,12 +39,17 @@ public:
     Usb& operator=(Usb&&) = delete;
 
     ~Usb() override {
-        stop_handling_events();
-        if (event_thread_.joinable())
-            event_thread_.join();
+        stop_handling_events_.store(true, std::memory_order::relaxed);
 
+        libusb_release_interface(libusb_device_handle_, target_interface_);
         if constexpr (utility::is_linux())
             libusb_attach_kernel_driver(libusb_device_handle_, 0);
+        libusb_close(libusb_device_handle_);
+
+        if (event_thread_.joinable())
+            event_thread_.join();
+        free_transmit_transfers_.pop_front_n([](TransferWrapper* wrapper) { delete wrapper; });
+
         libusb_exit(libusb_context_);
     }
 
@@ -80,6 +85,8 @@ public:
     void receive(std::function<void(const std::byte*, size_t size)> callback) override {
         if (!callback)
             throw std::invalid_argument{"Callback function cannot be null"};
+        if (receive_callback_)
+            throw std::logic_error{"Receive function can only be called once"};
 
         receive_callback_ = std::move(callback);
         init_receive_transfers();
@@ -105,7 +112,7 @@ private:
             return reinterpret_cast<std::byte*>(transfer_->buffer);
         }
 
-        size_t size() noexcept override { return max_transfer_length_; }
+        size_t size() const noexcept override { return max_transfer_length_; }
 
     private:
         Usb& self_;
@@ -300,15 +307,6 @@ private:
         while (active_transfers_.load(std::memory_order::relaxed)) {
             libusb_handle_events(libusb_context_);
         }
-    }
-
-    void stop_handling_events() {
-        free_transmit_transfers_.pop_front_n([](TransferWrapper* wrapper) { delete wrapper; });
-
-        stop_handling_events_.store(true, std::memory_order::relaxed);
-
-        libusb_release_interface(libusb_device_handle_, target_interface_);
-        libusb_close(libusb_device_handle_);
     }
 
     void init_transmit_transfers() {

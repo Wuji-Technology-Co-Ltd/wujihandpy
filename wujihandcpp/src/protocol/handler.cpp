@@ -33,6 +33,8 @@ public:
         , storage_unit_count_(storage_unit_count)
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
         , transport_(std::move(transport))
+        , sdo_helper_(*transport_, 0x21)
+        , pdo_helper_(*transport_, 0x11)
         , sdo_thread_([this](const std::stop_token& stop_token) { tick_thread_main(stop_token); }) {
 
         transport_->receive([this](const std::byte* buffer, size_t size) {
@@ -247,7 +249,7 @@ private:
         const uint8_t header_type_;
 
         std::unique_ptr<transport::IBuffer> buffer_ = nullptr;
-        std::byte *current_, *end_;
+        std::byte *current_ = nullptr, *end_ = nullptr;
     };
 
 private:
@@ -319,7 +321,8 @@ private:
             else
                 throw std::runtime_error{std::format("Invalid header type: 0x{:02X}", header.type)};
         } catch (const std::runtime_error& ex) {
-            logger_.error("RX Frame parsing failed at offset {}: {}", pointer - buffer, ex.what());
+            logger_.error("RX Frame parsing failed at offset {}", pointer - buffer);
+            logger_.error(ex.what());
             logger_.error(
                 "RX Frame dump [{} bytes] {:Xp}", size, spdlog::to_hex(buffer, buffer + size));
         }
@@ -646,8 +649,8 @@ private:
     std::map<uint32_t, StorageUnit*> index_storage_map_;
 
     std::unique_ptr<transport::ITransport> transport_;
-    TransmitHelper sdo_helper_{*transport_, 0x21};
-    TransmitHelper pdo_helper_{*transport_, 0x11};
+    TransmitHelper sdo_helper_;
+    TransmitHelper pdo_helper_;
 
     std::jthread sdo_thread_;
 

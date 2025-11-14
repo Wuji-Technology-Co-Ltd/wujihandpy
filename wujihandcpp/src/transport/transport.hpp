@@ -14,7 +14,7 @@ public:
 
     virtual std::byte* data() noexcept = 0;
 
-    virtual size_t size() noexcept = 0;
+    virtual size_t size() const noexcept = 0;
 };
 
 class ITransport {
