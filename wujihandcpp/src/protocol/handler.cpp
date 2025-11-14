@@ -35,7 +35,7 @@ public:
         , transport_(std::move(transport))
         , sdo_helper_(*transport_, 0x21)
         , pdo_helper_(*transport_, 0x11)
-        , sdo_thread_([this](const std::stop_token& stop_token) { tick_thread_main(stop_token); }) {
+        , sdo_thread_([this](const std::stop_token& stop_token) { sdo_thread_main(stop_token); }) {
 
         transport_->receive([this](const std::byte* buffer, size_t size) {
             receive_transfer_completed_callback(buffer, size);
@@ -123,7 +123,7 @@ public:
 
         realtime_controller_ = std::move(guard);
         pdo_thread_ = std::jthread{[this, enable_upstream](const std::stop_token& stop_token) {
-            realtime_controller_thread_main(stop_token, enable_upstream);
+            pdo_thread_main(stop_token, enable_upstream);
         }};
     }
 
@@ -418,7 +418,7 @@ private:
         return *it->second;
     }
 
-    void tick_thread_main(const std::stop_token& token) {
+    void sdo_thread_main(const std::stop_token& token) {
         constexpr double update_rate = 199.0;
         constexpr auto update_period =
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
@@ -512,7 +512,7 @@ private:
             std::memory_order::release);
     }
 
-    void realtime_controller_thread_main(const std::stop_token& token, bool upstream_enabled) {
+    void pdo_thread_main(const std::stop_token& token, bool upstream_enabled) {
         constexpr double update_rate = 500.0;
         constexpr auto update_period =
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
