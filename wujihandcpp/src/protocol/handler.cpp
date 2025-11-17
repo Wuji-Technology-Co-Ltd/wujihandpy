@@ -19,8 +19,10 @@
 #include <wujihandcpp/protocol/handler.hpp>
 #include <wujihandcpp/utility/api.hpp>
 
+#include "latency_tester.hpp"
 #include "logging/logging.hpp"
 #include "protocol/protocol.hpp"
+#include "protocol/transmit_helper.hpp"
 #include "transport/transport.hpp"
 
 namespace wujihandcpp::protocol {
@@ -118,8 +120,11 @@ public:
 
     void attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream) {
         std::unique_ptr<device::IRealtimeController> guard(controller);
+
         if (realtime_controller_)
-            throw std::runtime_error("A realtime controller is already attached.");
+            throw std::logic_error("A realtime controller is already attached.");
+        if (latency_tester_)
+            throw std::logic_error("Latency testing is underway.");
 
         realtime_controller_ = std::move(guard);
         pdo_thread_ = std::jthread{[this, enable_upstream](const std::stop_token& stop_token) {
@@ -129,12 +134,23 @@ public:
 
     device::IRealtimeController* detach_realtime_controller() {
         if (!realtime_controller_)
-            throw std::runtime_error("No realtime controller attached.");
+            throw std::logic_error("No realtime controller attached.");
 
         pdo_thread_.request_stop();
         pdo_thread_.join();
 
         return realtime_controller_.release();
+    }
+
+    void start_latency_test() {
+        if (realtime_controller_)
+            throw std::logic_error("A realtime controller is already attached.");
+        if (latency_tester_)
+            throw std::logic_error("Latency testing is underway.");
+
+        latency_tester_ = std::make_unique<LatencyTester>(pdo_helper_);
+        pdo_thread_ = std::jthread{
+            [this](const std::stop_token& stop_token) { latency_tester_->spin(stop_token); }};
     }
 
     Buffer8 get(int storage_id) { return load_data(storage_[storage_id]); }
@@ -186,71 +202,6 @@ private:
         Buffer8 callback_context;
     };
     static_assert(sizeof(StorageUnit) == 64);
-
-    class TransmitHelper {
-    public:
-        TransmitHelper(transport::ITransport& transport, uint8_t header_type)
-            : logger_(logging::get_logger())
-            , transport_(transport)
-            , header_type_(header_type) {
-            flush();
-        };
-
-        std::byte* fetch_buffer(int size) {
-            if (current_ + size + sizeof(protocol::CrcCheck) >= end_)
-                flush();
-
-            auto current = current_;
-            current_ += size;
-            return current;
-        }
-
-        void flush() {
-            if (buffer_) {
-                auto begin = buffer_->data();
-                auto size = current_ - begin;
-
-                auto compressed_frame_length =
-                    static_cast<uint16_t>((size + (int)sizeof(protocol::CrcCheck) - 1) / 16 + 1);
-                auto padded_length = 16 * compressed_frame_length;
-                std::memset(current_, 0, padded_length - size);
-
-                auto& header = *reinterpret_cast<protocol::Header*>(begin);
-                struct {
-                    uint16_t max_receive_window : 10;
-                    uint16_t frame_length       : 6;
-                } description{
-                    .max_receive_window = 0xA0,
-                    .frame_length = (uint8_t)(compressed_frame_length - 1)};
-                header.description = std::bit_cast<int16_t>(description);
-
-                logger_.trace(
-                    "TX [{} bytes] {:Xp}", padded_length,
-                    spdlog::to_hex(begin, begin + padded_length));
-
-                transport_.transmit(std::move(buffer_), padded_length);
-            }
-
-            buffer_ = transport_.request_transmit_buffer();
-            if (!buffer_)
-                throw std::runtime_error{"No buffer available!"};
-
-            current_ = buffer_->data();
-            end_ = current_ + buffer_->size();
-
-            auto& header = *new (current_) protocol::Header{};
-            header.type = header_type_;
-            current_ += sizeof(header);
-        }
-
-        logging::Logger& logger_;
-
-        transport::ITransport& transport_;
-        const uint8_t header_type_;
-
-        std::unique_ptr<transport::IBuffer> buffer_ = nullptr;
-        std::byte *current_ = nullptr, *end_ = nullptr;
-    };
 
 private:
     void operation_thread_check() const {
@@ -357,10 +308,15 @@ private:
     void read_sdo_operation_read_success(const std::byte*& pointer, const std::byte* sentinel) {
         const auto& data =
             read_frame_struct<protocol::sdo::ReadResultSuccess<T>>(pointer, sentinel);
-
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
-
         auto operation = storage.operation.load(std::memory_order::acquire);
+
+        logger_.debug(
+            "SDO Read Success: 0x{:04X}.{} ({}), Mode={}, State={}",
+            static_cast<uint16_t>(data.header.index), data.header.sub_index,
+            static_cast<void*>(&storage), static_cast<int>(operation.mode),
+            static_cast<int>(operation.state));
+
         if (operation.mode == Operation::Mode::NONE) [[unlikely]]
             return;
 
@@ -418,21 +374,24 @@ private:
         return *it->second;
     }
 
-    void sdo_thread_main(const std::stop_token& token) {
+    void sdo_thread_main(const std::stop_token& stop_token) {
         constexpr double update_rate = 199.0;
         constexpr auto update_period =
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(1.0 / update_rate));
 
-        while (!token.stop_requested()) {
+        while (!stop_token.stop_requested()) {
             auto now = std::chrono::steady_clock::now();
 
+            bool has_event = false;
             for (size_t i = 0; i < storage_unit_count_; i++) {
                 auto& storage = storage_[i];
 
                 auto operation = storage.operation.load(std::memory_order::acquire);
                 if (operation.mode == Operation::Mode::NONE)
                     continue;
+
+                has_event = true;
 
                 if (storage.info.policy & Handler::StorageInfo::MASKED)
                     operation.state = Operation::State::SUCCESS;
@@ -467,6 +426,11 @@ private:
                 } else if (
                     operation.state == Operation::State::READING
                     || operation.state == Operation::State::WRITING_CONFIRMING) {
+                    logger_.debug(
+                        "SDO Read Request: 0x{:04X}.{} ({}), Mode={}, State={}",
+                        static_cast<uint16_t>(storage.info.index), storage.info.sub_index,
+                        static_cast<void*>(&storage), static_cast<int>(operation.mode),
+                        static_cast<int>(operation.state));
                     read_async_unchecked_internal(storage.info.index, storage.info.sub_index);
                 } else if (operation.state == Operation::State::WRITING) {
                     operation.state = Operation::State::WRITING_CONFIRMING;
@@ -489,30 +453,40 @@ private:
                             storage.info.index, storage.info.sub_index);
                 }
             }
-            sdo_helper_.flush();
+            if (has_event)
+                sdo_helper_.flush_or_drop();
 
             std::this_thread::sleep_for(update_period);
         }
     }
 
     void read_pdo_frame(const std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
+        const auto& header = read_frame_struct<protocol::pdo::Header>(pointer, sentinel);
 
-        if (data.read_executed != 1)
+        if (header.read_id == 0x01) {
+            const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
+
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
+                    pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
+
+            pdo_read_result_version_.store(
+                pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
+                std::memory_order::release);
+        } else if (header.read_id == 0xD0) {
+            const auto& data =
+                read_frame_struct<protocol::pdo::LatencyTestResult>(pointer, sentinel);
+            if (!latency_tester_) [[unlikely]]
+                throw std::runtime_error(
+                    "PDO frame invalid: Got a latency test package but latency test was not "
+                    "started");
+            latency_tester_->read_result(data);
+        } else
             throw std::runtime_error(
-                std::format(
-                    "PDO frame invalid: read_executed flag is 0x{:02X}", data.read_executed));
-
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 4; j++)
-                pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
-
-        pdo_read_result_version_.store(
-            pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
-            std::memory_order::release);
+                std::format("PDO frame invalid: read_id == 0x{:02X}", header.read_id));
     }
 
-    void pdo_thread_main(const std::stop_token& token, bool upstream_enabled) {
+    void pdo_thread_main(const std::stop_token& stop_token, bool upstream_enabled) {
         constexpr double update_rate = 500.0;
         constexpr auto update_period =
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
@@ -524,7 +498,7 @@ private:
         realtime_controller_->setup(update_rate);
         if (upstream_enabled) {
             const uint64_t old_version = pdo_read_result_version_.load(std::memory_order::relaxed);
-            while (!token.stop_requested()) {
+            while (!stop_token.stop_requested()) {
                 pdo_read_async_unchecked();
                 next_iteration_time += update_period;
                 std::this_thread::sleep_until(next_iteration_time);
@@ -532,7 +506,7 @@ private:
                     break;
             }
 
-            while (!token.stop_requested()) {
+            while (!stop_token.stop_requested()) {
                 device::IRealtimeController::JointPositions positions;
                 for (int i = 0; i < 5; i++)
                     for (int j = 0; j < 4; j++) {
@@ -555,7 +529,7 @@ private:
                 std::this_thread::sleep_until(next_iteration_time);
             }
         } else {
-            while (!token.stop_requested()) {
+            while (!stop_token.stop_requested()) {
                 auto target_positions = realtime_controller_->step(nullptr);
                 pdo_write_async_unchecked(
                     false, target_positions.value,
@@ -607,13 +581,14 @@ private:
     void pdo_read_async_unchecked() {
         std::byte* buffer = pdo_helper_.fetch_buffer(sizeof(protocol::pdo::Read));
         new (buffer) protocol::pdo::Read{};
-        pdo_helper_.flush();
+        pdo_helper_.flush_or_drop();
     }
+
     void pdo_write_async_unchecked(
         bool upstream_enabled, const double (&target_positions)[5][4], uint32_t timestamp) {
         std::byte* buffer = pdo_helper_.fetch_buffer(sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
-        payload->enable_read = upstream_enabled;
+        payload->read_id = upstream_enabled ? 0x01 : 0x00;
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {
@@ -623,7 +598,7 @@ private:
             }
         payload->timestamp = timestamp;
 
-        pdo_helper_.flush();
+        pdo_helper_.flush_or_drop();
     }
 
     template <size_t size>
@@ -648,14 +623,16 @@ private:
     };
     std::map<uint32_t, StorageUnit*> index_storage_map_;
 
+    std::atomic<int32_t> pdo_read_result_[5][4];
+    std::atomic<uint64_t> pdo_read_result_version_ = 0;
+
+    std::unique_ptr<LatencyTester> latency_tester_;
+
     std::unique_ptr<transport::ITransport> transport_;
     TransmitHelper sdo_helper_;
     TransmitHelper pdo_helper_;
 
     std::jthread sdo_thread_;
-
-    std::atomic<int32_t> pdo_read_result_[5][4];
-    std::atomic<uint64_t> pdo_read_result_version_ = 0;
 
     std::unique_ptr<device::IRealtimeController> realtime_controller_;
     std::jthread pdo_thread_;
@@ -703,6 +680,8 @@ WUJIHANDCPP_API void Handler::attach_realtime_controller(
 WUJIHANDCPP_API device::IRealtimeController* Handler::detach_realtime_controller() {
     return impl_->detach_realtime_controller();
 }
+
+WUJIHANDCPP_API void Handler::start_latency_test() { impl_->start_latency_test(); }
 
 WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) { return impl_->get(storage_id); }
 

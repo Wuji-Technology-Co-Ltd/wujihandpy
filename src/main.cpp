@@ -71,6 +71,8 @@ PYBIND11_MODULE(_core, m) {
         "realtime_controller", &Hand::realtime_controller, py::arg("enable_upstream"),
         py::arg("filter"), py::keep_alive<0, 1>());
 
+    hand.def("start_latency_test", &Hand::start_latency_test);
+
     using Finger = Wrapper<wujihandcpp::device::Finger>;
     auto finger = py::class_<Finger>(m, "Finger");
     hand.def("finger", &Hand::finger, py::arg("index"), py::keep_alive<0, 1>());

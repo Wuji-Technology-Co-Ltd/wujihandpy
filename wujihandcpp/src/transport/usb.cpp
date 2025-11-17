@@ -444,7 +444,7 @@ private:
 
     static constexpr int max_transfer_length_ = 512;
 
-    static constexpr size_t transmit_transfer_count_ = 32;
+    static constexpr size_t transmit_transfer_count_ = 64;
     static constexpr size_t receive_transfer_count_ = 4;
 
     logging::Logger& logger_;

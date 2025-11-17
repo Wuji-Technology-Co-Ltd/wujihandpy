@@ -95,6 +95,8 @@ public:
 
     WUJIHANDCPP_API device::IRealtimeController* detach_realtime_controller();
 
+    WUJIHANDCPP_API void start_latency_test();
+
     WUJIHANDCPP_API Buffer8 get(int storage_id);
 
     WUJIHANDCPP_API void disable_thread_safe_check();
