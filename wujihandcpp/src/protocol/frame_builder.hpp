@@ -17,9 +17,9 @@
 
 namespace wujihandcpp::protocol {
 
-class TransmitHelper {
+class FrameBuilder {
 public:
-    TransmitHelper(transport::ITransport& transport, uint8_t header_type)
+    FrameBuilder(transport::ITransport& transport, uint8_t header_type)
         : logger_(logging::get_logger())
         , transport_(transport)
         , header_type_(header_type) {
@@ -27,38 +27,40 @@ public:
         buffer_ = transport_.request_transmit_buffer();
         if (!buffer_)
             throw std::runtime_error("No buffer available!");
-        reset_current_buffer();
+        reset_frame();
     };
 
-    std::byte* fetch_buffer(int size) {
-        if (current_ + size + sizeof(protocol::CrcCheck) >= end_)
-            flush_or_drop();
+    std::byte* allocate(int size) {
+        const auto required = static_cast<std::ptrdiff_t>(size)
+                            + static_cast<std::ptrdiff_t>(sizeof(protocol::CrcCheck));
+        if (end_ - current_ <= required)
+            finalize();
 
-        auto current = current_;
-        if (current_ + size + sizeof(protocol::CrcCheck) >= end_)
+        if (end_ - current_ <= required)
             throw std::invalid_argument("Expected size is too long");
 
+        auto current = current_;
         current_ += size;
         return current;
     }
 
-    void flush_or_drop() {
+    void finalize() {
         auto new_buffer = transport_.request_transmit_buffer();
         if (!new_buffer) {
-            reset_current_buffer();
-            dropped_buffer_count_++;
+            reset_frame();
+            dropped_frame_count_++;
             return;
         }
 
-        transmit_current_buffer();
+        transmit_frame();
         buffer_ = std::move(new_buffer);
-        reset_current_buffer();
+        reset_frame();
     }
 
-    uint64_t dropped_buffer_count() const { return dropped_buffer_count_; }
+    uint64_t dropped_frame_count() const { return dropped_frame_count_; }
 
 private:
-    void reset_current_buffer() {
+    void reset_frame() {
         const auto size = buffer_->size();
         assert(size % 16 == 0);
         assert(size > sizeof(protocol::Header) + sizeof(protocol::CrcCheck));
@@ -71,7 +73,7 @@ private:
         current_ += sizeof(header);
     }
 
-    void transmit_current_buffer() {
+    void transmit_frame() {
         auto begin = buffer_->data();
         auto size = current_ - begin;
 
@@ -102,7 +104,7 @@ private:
     std::unique_ptr<transport::IBuffer> buffer_ = nullptr;
     std::byte *current_ = nullptr, *end_ = nullptr;
 
-    uint64_t dropped_buffer_count_ = 0;
+    uint64_t dropped_frame_count_ = 0;
 };
 
 } // namespace wujihandcpp::protocol

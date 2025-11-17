@@ -19,10 +19,10 @@
 #include <wujihandcpp/protocol/handler.hpp>
 #include <wujihandcpp/utility/api.hpp>
 
-#include "latency_tester.hpp"
 #include "logging/logging.hpp"
+#include "protocol/frame_builder.hpp"
+#include "protocol/latency_tester.hpp"
 #include "protocol/protocol.hpp"
-#include "protocol/transmit_helper.hpp"
 #include "transport/transport.hpp"
 
 namespace wujihandcpp::protocol {
@@ -35,8 +35,8 @@ public:
         , storage_unit_count_(storage_unit_count)
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
         , transport_(std::move(transport))
-        , sdo_helper_(*transport_, 0x21)
-        , pdo_helper_(*transport_, 0x11)
+        , sdo_builder_(*transport_, 0x21)
+        , pdo_builder_(*transport_, 0x11)
         , sdo_thread_([this](const std::stop_token& stop_token) { sdo_thread_main(stop_token); }) {
 
         transport_->receive([this](const std::byte* buffer, size_t size) {
@@ -148,7 +148,7 @@ public:
         if (latency_tester_)
             throw std::logic_error("Latency testing is underway.");
 
-        latency_tester_ = std::make_unique<LatencyTester>(pdo_helper_);
+        latency_tester_ = std::make_unique<LatencyTester>(pdo_builder_);
         pdo_thread_ = std::jthread{
             [this](const std::stop_token& stop_token) { latency_tester_->spin(stop_token); }};
     }
@@ -454,7 +454,7 @@ private:
                 }
             }
             if (has_event)
-                sdo_helper_.flush_or_drop();
+                sdo_builder_.finalize();
 
             std::this_thread::sleep_for(update_period);
         }
@@ -561,7 +561,7 @@ private:
     }
 
     void read_async_unchecked_internal(uint16_t index, uint8_t sub_index) {
-        std::byte* buffer = sdo_helper_.fetch_buffer(sizeof(protocol::sdo::Read));
+        std::byte* buffer = sdo_builder_.allocate(sizeof(protocol::sdo::Read));
         new (buffer) protocol::sdo::Read{
             .index = index,
             .sub_index = sub_index,
@@ -570,7 +570,7 @@ private:
 
     template <protocol::is_type_erased_integral T>
     void write_async_unchecked_internal(T value, uint16_t index, uint8_t sub_index) {
-        std::byte* buffer = sdo_helper_.fetch_buffer(sizeof(protocol::sdo::Write<T>));
+        std::byte* buffer = sdo_builder_.allocate(sizeof(protocol::sdo::Write<T>));
         new (buffer) protocol::sdo::Write<T>{
             .index = index,
             .sub_index = sub_index,
@@ -579,14 +579,14 @@ private:
     }
 
     void pdo_read_async_unchecked() {
-        std::byte* buffer = pdo_helper_.fetch_buffer(sizeof(protocol::pdo::Read));
+        std::byte* buffer = pdo_builder_.allocate(sizeof(protocol::pdo::Read));
         new (buffer) protocol::pdo::Read{};
-        pdo_helper_.flush_or_drop();
+        pdo_builder_.finalize();
     }
 
     void pdo_write_async_unchecked(
         bool upstream_enabled, const double (&target_positions)[5][4], uint32_t timestamp) {
-        std::byte* buffer = pdo_helper_.fetch_buffer(sizeof(protocol::pdo::Write));
+        std::byte* buffer = pdo_builder_.allocate(sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
         payload->read_id = upstream_enabled ? 0x01 : 0x00;
 
@@ -598,7 +598,7 @@ private:
             }
         payload->timestamp = timestamp;
 
-        pdo_helper_.flush_or_drop();
+        pdo_builder_.finalize();
     }
 
     template <size_t size>
@@ -629,8 +629,8 @@ private:
     std::unique_ptr<LatencyTester> latency_tester_;
 
     std::unique_ptr<transport::ITransport> transport_;
-    TransmitHelper sdo_helper_;
-    TransmitHelper pdo_helper_;
+    FrameBuilder sdo_builder_;
+    FrameBuilder pdo_builder_;
 
     std::jthread sdo_thread_;
 

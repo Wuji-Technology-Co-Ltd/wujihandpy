@@ -5,8 +5,8 @@
 #include <memory_resource>
 
 #include "logging/logging.hpp"
+#include "protocol/frame_builder.hpp"
 #include "protocol/protocol.hpp"
-#include "protocol/transmit_helper.hpp"
 #include "utility/ring_buffer.hpp"
 #include "utility/tdigest.hpp"
 #include "utility/tick_executor.hpp"
@@ -15,16 +15,16 @@ namespace wujihandcpp::protocol {
 
 class LatencyTester {
 public:
-    explicit LatencyTester(TransmitHelper& transmit)
+    explicit LatencyTester(FrameBuilder& builder)
         : logger_(logging::get_logger())
-        , transmit_(transmit) {}
+        , builder_(builder) {}
 
     void spin(const std::stop_token& stop_token) {
         logger_.info("Starting latency test with {} Frames warmup...", warmup_frames);
         uint64_t next_log_frame = warmup_frames;
 
         auto executor = utility::TickExecutor{[&](const utility::TickContext& context) {
-            std::byte* buffer = transmit_.fetch_buffer(sizeof(protocol::pdo::LatencyTest));
+            std::byte* buffer = builder_.allocate(sizeof(protocol::pdo::LatencyTest));
             new (buffer) protocol::pdo::LatencyTest{.id = next_id_};
 
             auto now = std::chrono::steady_clock::now();
@@ -33,7 +33,7 @@ public:
                     "Pending requests queue is full, which should not happen. Test results may be "
                     "distorted.");
 
-            transmit_.flush_or_drop();
+            builder_.finalize();
 
             if (++next_id_ == 0)
                 next_id_ = 1;
@@ -76,16 +76,15 @@ public:
             p90_us, p90_us / update_period_us * 100.0, p99_us, p99_us / update_period_us * 100.0,
             max_us, max_us / update_period_us * 100.0);
 
-        uint64_t dropped_frame_count =
-            context.skipped_frame_count + transmit_.dropped_buffer_count();
+        uint64_t dropped_frame_count = context.skipped_frame_count + builder_.dropped_frame_count();
         logger_.info(
             "  Frame Drop: {}/{} ({:.3f}%, {} Deadline Miss + {} Buffer Full)", dropped_frame_count,
             frame_count,
-            static_cast<double>(dropped_frame_count) / static_cast<double>(frame_count),
-            context.skipped_frame_count, transmit_.dropped_buffer_count());
+            static_cast<double>(dropped_frame_count) / static_cast<double>(frame_count) * 100.0,
+            context.skipped_frame_count, builder_.dropped_frame_count());
 
         dropped_frame_count_.store(
-            context.skipped_frame_count + transmit_.dropped_buffer_count(),
+            context.skipped_frame_count + builder_.dropped_frame_count(),
             std::memory_order::relaxed);
         frame_index_.store(context.frame_index, std::memory_order::release);
     }
@@ -187,7 +186,7 @@ private:
 
     logging::Logger& logger_;
 
-    TransmitHelper& transmit_;
+    FrameBuilder& builder_;
 
     uint32_t next_id_ = 1; // 1 ~ uint32_max
 
