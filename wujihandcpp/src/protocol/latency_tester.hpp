@@ -44,8 +44,12 @@ public:
                 } else {
                     log_thread_statistics(context);
                 }
-
                 next_log_frame += log_frames_;
+
+                dropped_frame_count_.store(
+                    context.skipped_frame_count + builder_.dropped_frame_count(),
+                    std::memory_order::relaxed);
+                frame_index_.store(context.frame_index, std::memory_order::release);
             }
         }}.spin(update_rate_, stop_token);
     }
@@ -81,11 +85,6 @@ public:
             frame_count,
             static_cast<double>(dropped_frame_count) / static_cast<double>(frame_count) * 100.0,
             context.skipped_frame_count, builder_.dropped_frame_count());
-
-        dropped_frame_count_.store(
-            context.skipped_frame_count + builder_.dropped_frame_count(),
-            std::memory_order::relaxed);
-        frame_index_.store(context.frame_index, std::memory_order::release);
     }
 
     void read_result(const pdo::LatencyTestResult& package) {
@@ -96,6 +95,8 @@ public:
             if (!success) [[unlikely]]
                 throw std::runtime_error("Id overlap in latency test");
         });
+
+        auto frame_index = frame_index_.load(std::memory_order::acquire);
 
         uint32_t id = 0;
         decltype(result_map_)::iterator it = result_map_.end();
@@ -122,7 +123,8 @@ public:
 
             if (++result.received_count == joint_count_) {
                 id = 0;
-                record_all_values(result);
+                if (frame_index >= warmup_frames_)
+                    record_all_values(result);
                 result_map_.erase(it);
                 it = result_map_.end();
             }
@@ -131,11 +133,11 @@ public:
         using namespace std::chrono_literals;
         it = result_map_.begin();
         while (it != result_map_.end() && now - it->second.transmit_timestamp > request_timeout_) {
-            record_received_values(it->second);
+            if (frame_index >= warmup_frames_)
+                record_received_values(it->second);
             it = result_map_.erase(it);
         }
 
-        auto frame_index = frame_index_.load(std::memory_order::acquire);
         if (frame_index >= next_log_frame_) {
             next_log_frame_ += log_frames_;
             log_device_statistics(
@@ -144,6 +146,8 @@ public:
     }
 
     void log_device_statistics(uint64_t frame_index, uint64_t dropped_frame_count) {
+        rtt_statistics_.merge();
+
         logger_.info("Device Communication:");
         logger_.info(
             "  Round Trip Time: Min {:.3f}ms, Med {:.3f}ms, P90 {:.3f}ms, P99 {:.3f}ms, Max "
@@ -165,7 +169,7 @@ private:
     static constexpr auto request_timeout_ = std::chrono::milliseconds{500};
     static constexpr double update_rate_ = 500.0;
 
-    static constexpr uint64_t warmup_frames_ = 1000, log_frames_ = 2500;
+    static constexpr uint64_t warmup_frames_ = 2000, log_frames_ = 2500;
 
     struct Request {
         uint32_t id;

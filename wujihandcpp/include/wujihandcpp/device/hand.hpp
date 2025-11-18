@@ -220,10 +220,11 @@ public:
         {
             Latch latch;
             write_async<data::joint::ControlMode>(latch, 5);
+            write_async<data::hand::RPdoId>(latch, 0x01);
             if (enable_upstream)
-                write_async<data::hand::TPdoId>(latch, 1);
+                write_async<data::hand::TPdoId>(latch, 0x01);
             else
-                write_async<data::hand::TPdoId>(latch, 0);
+                write_async<data::hand::TPdoId>(latch, 0x00);
             write_async<data::hand::PdoInterval>(latch, 2000);
             write_async<data::hand::PdoEnabled>(latch, 1);
             latch.wait();
@@ -258,8 +259,8 @@ public:
 
         {
             Latch latch;
-            write_async<data::hand::RPdoId>(latch, 0x00D0);
-            write_async<data::hand::TPdoId>(latch, 0x00D0);
+            write_async<data::hand::RPdoId>(latch, 0xD0);
+            write_async<data::hand::TPdoId>(latch, 0xD0);
             write_async<data::hand::PdoInterval>(latch, 2000);
             write_async<data::hand::PdoEnabled>(latch, 1);
             latch.wait();

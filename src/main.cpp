@@ -72,6 +72,7 @@ PYBIND11_MODULE(_core, m) {
         py::arg("filter"), py::keep_alive<0, 1>());
 
     hand.def("start_latency_test", &Hand::start_latency_test);
+    hand.def("stop_latency_test", &Hand::stop_latency_test);
 
     using Finger = Wrapper<wujihandcpp::device::Finger>;
     auto finger = py::class_<Finger>(m, "Finger");

@@ -257,6 +257,7 @@ public:
     }
 
     void start_latency_test() { T::start_latency_test(); }
+    void stop_latency_test() { T::stop_latency_test(); }
 
     template <typename Data>
     static void register_py_interface(py::class_<Wrapper>& py_class, const std::string& name) {
