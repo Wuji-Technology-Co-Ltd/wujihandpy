@@ -25,6 +25,7 @@
 #include "protocol/latency_tester.hpp"
 #include "protocol/protocol.hpp"
 #include "transport/transport.hpp"
+#include "utility/tick_executor.hpp"
 
 namespace wujihandcpp::protocol {
 
@@ -515,25 +516,16 @@ private:
 
     void pdo_thread_main(const std::stop_token& stop_token, bool upstream_enabled) {
         constexpr double update_rate = 500.0;
-        constexpr auto update_period =
-            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                std::chrono::duration<double>(1.0 / update_rate));
-
-        auto begin = std::chrono::steady_clock::now();
-        auto next_iteration_time = begin;
-
         realtime_controller_->setup(update_rate);
+
         if (upstream_enabled) {
             const uint64_t old_version = pdo_read_result_version_.load(std::memory_order::relaxed);
-            while (!stop_token.stop_requested()) {
+            utility::TickExecutor{[&](const utility::TickContext&) -> bool {
                 pdo_read_async_unchecked();
-                next_iteration_time += update_period;
-                std::this_thread::sleep_until(next_iteration_time);
-                if (pdo_read_result_version_.load(std::memory_order::acquire) != old_version)
-                    break;
-            }
+                return pdo_read_result_version_.load(std::memory_order::acquire) == old_version;
+            }}.spin(update_rate, stop_token);
 
-            while (!stop_token.stop_requested()) {
+            utility::TickExecutor{[&](const utility::TickContext& context) {
                 device::IRealtimeController::JointPositions positions;
                 for (int i = 0; i < 5; i++)
                     for (int j = 0; j < 4; j++) {
@@ -549,24 +541,18 @@ private:
                 pdo_write_async_unchecked(
                     true, target_positions.value,
                     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                              next_iteration_time - begin)
+                                              context.scheduled_update_time - context.begin_time)
                                               .count()));
-
-                next_iteration_time += update_period;
-                std::this_thread::sleep_until(next_iteration_time);
-            }
+            }}.spin(update_rate, stop_token);
         } else {
-            while (!stop_token.stop_requested()) {
+            utility::TickExecutor{[&](const utility::TickContext& context) {
                 auto target_positions = realtime_controller_->step(nullptr);
                 pdo_write_async_unchecked(
                     false, target_positions.value,
                     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                              next_iteration_time - begin)
+                                              context.scheduled_update_time - context.begin_time)
                                               .count()));
-
-                next_iteration_time += update_period;
-                std::this_thread::sleep_until(next_iteration_time);
-            }
+            }}.spin(update_rate, stop_token);
         }
     }
 

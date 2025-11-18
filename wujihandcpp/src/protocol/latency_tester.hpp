@@ -25,7 +25,7 @@ public:
         logger_.info("Starting latency test with {} Frames warmup...", warmup_frames_);
         uint64_t next_log_frame = warmup_frames_;
 
-        auto executor = utility::TickExecutor{[&](const utility::TickContext& context) {
+        utility::TickExecutor{[&](const utility::TickContext& context) {
             send_latency_probe();
 
             auto now = std::chrono::steady_clock::now();
@@ -47,8 +47,7 @@ public:
 
                 next_log_frame += log_frames_;
             }
-        }};
-        executor.spin(update_rate_, stop_token);
+        }}.spin(update_rate_, stop_token);
     }
 
     void log_thread_statistics(const utility::TickContext& context) {
