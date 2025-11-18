@@ -16,7 +16,7 @@ PACKED_STRUCT(Header {
 
     utility::be_uint16_t description;
 
-    uint8_t type = 0;
+    uint8_t type;
     uint8_t prefix = 0x00;
 });
 

@@ -70,8 +70,7 @@ public:
     };
 
     WUJIHANDCPP_API explicit Handler(
-        uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
-        size_t storage_unit_count);
+        uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t storage_unit_count);
 
     WUJIHANDCPP_API ~Handler();
 
