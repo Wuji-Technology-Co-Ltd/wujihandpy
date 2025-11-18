@@ -10,6 +10,7 @@
 #include <format>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <numbers>
 #include <stdexcept>
 #include <thread>
@@ -119,6 +120,8 @@ public:
     }
 
     void attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream) {
+        operation_thread_check();
+
         std::unique_ptr<device::IRealtimeController> guard(controller);
 
         if (realtime_controller_)
@@ -133,6 +136,8 @@ public:
     }
 
     device::IRealtimeController* detach_realtime_controller() {
+        operation_thread_check();
+
         if (!realtime_controller_)
             throw std::logic_error("No realtime controller attached.");
 
@@ -143,14 +148,36 @@ public:
     }
 
     void start_latency_test() {
+        operation_thread_check();
+
         if (realtime_controller_)
             throw std::logic_error("A realtime controller is already attached.");
         if (latency_tester_)
             throw std::logic_error("Latency testing is underway.");
 
-        latency_tester_ = std::make_unique<LatencyTester>(pdo_builder_);
+        auto latency_tester = std::make_unique<LatencyTester>(pdo_builder_);
+        {
+            std::lock_guard guard{latency_tester_mutex_};
+            latency_tester_ = std::move(latency_tester);
+        }
+
         pdo_thread_ = std::jthread{
             [this](const std::stop_token& stop_token) { latency_tester_->spin(stop_token); }};
+    }
+
+    void stop_latency_test() {
+        operation_thread_check();
+
+        if (!latency_tester_)
+            throw std::logic_error("Latency testing is not started.");
+
+        pdo_thread_.request_stop();
+        pdo_thread_.join();
+
+        {
+            std::lock_guard guard{latency_tester_mutex_};
+            latency_tester_.reset();
+        }
     }
 
     Buffer8 get(int storage_id) { return load_data(storage_[storage_id]); }
@@ -476,11 +503,11 @@ private:
         } else if (header.read_id == 0xD0) {
             const auto& data =
                 read_frame_struct<protocol::pdo::LatencyTestResult>(pointer, sentinel);
-            if (!latency_tester_) [[unlikely]]
-                throw std::runtime_error(
-                    "PDO frame invalid: Got a latency test package but latency test was not "
-                    "started");
-            latency_tester_->read_result(data);
+            std::unique_lock guard{latency_tester_mutex_, std::try_to_lock};
+            if (guard.owns_lock()) {
+                if (latency_tester_)
+                    latency_tester_->read_result(data);
+            }
         } else
             throw std::runtime_error(
                 std::format("PDO frame invalid: read_id == 0x{:02X}", header.read_id));
@@ -626,11 +653,12 @@ private:
     std::atomic<int32_t> pdo_read_result_[5][4];
     std::atomic<uint64_t> pdo_read_result_version_ = 0;
 
-    std::unique_ptr<LatencyTester> latency_tester_;
-
     std::unique_ptr<transport::ITransport> transport_;
     FrameBuilder sdo_builder_;
     FrameBuilder pdo_builder_;
+
+    std::unique_ptr<LatencyTester> latency_tester_;
+    std::mutex latency_tester_mutex_;
 
     std::jthread sdo_thread_;
 
@@ -682,6 +710,8 @@ WUJIHANDCPP_API device::IRealtimeController* Handler::detach_realtime_controller
 }
 
 WUJIHANDCPP_API void Handler::start_latency_test() { impl_->start_latency_test(); }
+
+WUJIHANDCPP_API void Handler::stop_latency_test() { impl_->stop_latency_test(); }
 
 WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) { return impl_->get(storage_id); }
 

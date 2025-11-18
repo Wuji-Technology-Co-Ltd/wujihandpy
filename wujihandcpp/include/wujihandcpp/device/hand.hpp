@@ -269,6 +269,20 @@ public:
         handler_.start_latency_test();
     }
 
+    void stop_latency_test() {
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
+
+        {
+            Latch latch;
+            write_async<data::hand::PdoEnabled>(latch, 0);
+            latch.wait();
+        }
+
+        revert_disabled_joints(last_enabled);
+        handler_.stop_latency_test();
+    }
+
     void disable_thread_safe_check() { handler_.disable_thread_safe_check(); }
 
 private:
