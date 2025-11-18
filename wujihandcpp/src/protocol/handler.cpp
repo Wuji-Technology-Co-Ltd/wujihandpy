@@ -10,6 +10,7 @@
 #include <format>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <numbers>
 #include <stdexcept>
 #include <thread>
@@ -21,6 +22,7 @@
 
 #include "logging/logging.hpp"
 #include "protocol/frame_builder.hpp"
+#include "protocol/latency_tester.hpp"
 #include "protocol/protocol.hpp"
 #include "transport/transport.hpp"
 #include "utility/tick_executor.hpp"
@@ -125,6 +127,8 @@ public:
 
         if (realtime_controller_)
             throw std::logic_error("A realtime controller is already attached.");
+        if (latency_tester_)
+            throw std::logic_error("Latency testing is underway.");
 
         realtime_controller_ = std::move(guard);
         pdo_thread_ = std::jthread{[this, enable_upstream](const std::stop_token& stop_token) {
@@ -142,6 +146,39 @@ public:
         pdo_thread_.join();
 
         return realtime_controller_.release();
+    }
+
+    void start_latency_test() {
+        operation_thread_check();
+
+        if (realtime_controller_)
+            throw std::logic_error("A realtime controller is already attached.");
+        if (latency_tester_)
+            throw std::logic_error("Latency testing is underway.");
+
+        auto latency_tester = std::make_unique<LatencyTester>(pdo_builder_);
+        {
+            std::lock_guard guard{latency_tester_mutex_};
+            latency_tester_ = std::move(latency_tester);
+        }
+
+        pdo_thread_ = std::jthread{
+            [this](const std::stop_token& stop_token) { latency_tester_->spin(stop_token); }};
+    }
+
+    void stop_latency_test() {
+        operation_thread_check();
+
+        if (!latency_tester_)
+            throw std::logic_error("Latency testing is not started.");
+
+        pdo_thread_.request_stop();
+        pdo_thread_.join();
+
+        {
+            std::lock_guard guard{latency_tester_mutex_};
+            latency_tester_.reset();
+        }
     }
 
     Buffer8 get(int storage_id) { return load_data(storage_[storage_id]); }
@@ -447,20 +484,29 @@ private:
     }
 
     void read_pdo_frame(const std::byte*& pointer, const std::byte* sentinel) {
-        const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
+        const auto& header = read_frame_struct<protocol::pdo::Header>(pointer, sentinel);
 
-        if (data.read_executed != 1)
+        if (header.read_id == 0x01) {
+            const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
+
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
+                    pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
+
+            pdo_read_result_version_.store(
+                pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
+                std::memory_order::release);
+        } else if (header.read_id == 0xD0) {
+            const auto& data =
+                read_frame_struct<protocol::pdo::LatencyTestResult>(pointer, sentinel);
+            std::unique_lock guard{latency_tester_mutex_, std::try_to_lock};
+            if (guard.owns_lock()) {
+                if (latency_tester_)
+                    latency_tester_->read_result(data);
+            }
+        } else
             throw std::runtime_error(
-                std::format(
-                    "PDO frame invalid: read_executed flag is 0x{:02X}", data.read_executed));
-
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 4; j++)
-                pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
-
-        pdo_read_result_version_.store(
-            pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
-            std::memory_order::release);
+                std::format("PDO frame invalid: read_id == 0x{:02X}", header.read_id));
     }
 
     void pdo_thread_main(const std::stop_token& stop_token, bool upstream_enabled) {
@@ -550,7 +596,7 @@ private:
         bool upstream_enabled, const double (&target_positions)[5][4], uint32_t timestamp) {
         std::byte* buffer = pdo_builder_.allocate(sizeof(protocol::pdo::Write));
         auto payload = new (buffer) protocol::pdo::Write{};
-        payload->enable_read = upstream_enabled;
+        payload->read_id = upstream_enabled ? 0x01 : 0x00;
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 4; j++) {
@@ -591,6 +637,9 @@ private:
     std::unique_ptr<transport::ITransport> transport_;
     FrameBuilder sdo_builder_;
     FrameBuilder pdo_builder_;
+
+    std::unique_ptr<LatencyTester> latency_tester_;
+    std::mutex latency_tester_mutex_;
 
     std::jthread sdo_thread_;
 
@@ -640,6 +689,10 @@ WUJIHANDCPP_API void Handler::attach_realtime_controller(
 WUJIHANDCPP_API device::IRealtimeController* Handler::detach_realtime_controller() {
     return impl_->detach_realtime_controller();
 }
+
+WUJIHANDCPP_API void Handler::start_latency_test() { impl_->start_latency_test(); }
+
+WUJIHANDCPP_API void Handler::stop_latency_test() { impl_->stop_latency_test(); }
 
 WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) { return impl_->get(storage_id); }
 

@@ -220,10 +220,11 @@ public:
         {
             Latch latch;
             write_async<data::joint::ControlMode>(latch, 5);
+            write_async<data::hand::RPdoId>(latch, 0x01);
             if (enable_upstream)
-                write_async<data::hand::TPdoId>(latch, 1);
+                write_async<data::hand::TPdoId>(latch, 0x01);
             else
-                write_async<data::hand::TPdoId>(latch, 0);
+                write_async<data::hand::TPdoId>(latch, 0x00);
             write_async<data::hand::PdoInterval>(latch, 2000);
             write_async<data::hand::PdoEnabled>(latch, 1);
             latch.wait();
@@ -250,6 +251,37 @@ public:
         revert_disabled_joints(last_enabled);
 
         return std::unique_ptr<IRealtimeController>{handler_.detach_realtime_controller()};
+    }
+
+    void start_latency_test() {
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
+
+        {
+            Latch latch;
+            write_async<data::hand::RPdoId>(latch, 0xD0);
+            write_async<data::hand::TPdoId>(latch, 0xD0);
+            write_async<data::hand::PdoInterval>(latch, 2000);
+            write_async<data::hand::PdoEnabled>(latch, 1);
+            latch.wait();
+        }
+
+        revert_disabled_joints(last_enabled);
+        handler_.start_latency_test();
+    }
+
+    void stop_latency_test() {
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
+
+        {
+            Latch latch;
+            write_async<data::hand::PdoEnabled>(latch, 0);
+            latch.wait();
+        }
+
+        revert_disabled_joints(last_enabled);
+        handler_.stop_latency_test();
     }
 
     void disable_thread_safe_check() { handler_.disable_thread_safe_check(); }

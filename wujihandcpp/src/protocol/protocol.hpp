@@ -92,23 +92,44 @@ PACKED_STRUCT(WriteResultError {
 
 namespace pdo {
 
+PACKED_STRUCT(Header {
+    uint8_t write_id;
+    uint8_t read_id;
+});
+
 PACKED_STRUCT(Read {
-    uint8_t enable_write = 0;
-    uint8_t enable_read = 1;
+    uint8_t write_id = 0x00;
+    uint8_t read_id = 0x01;
 });
 
 PACKED_STRUCT(Write {
-    uint8_t enable_write = 1;
-    uint8_t enable_read; // 0 or 1
+    uint8_t write_id = 0x01;
+    uint8_t read_id; // 0x00 || 0x01
     int32_t target_positions[5][4];
     uint32_t timestamp;
 });
 
-// Only response when `enable_read == 1`
-PACKED_STRUCT(CommandResult {
-    uint8_t write_executed;
-    uint8_t read_executed;
-    int32_t positions[5][4];
+PACKED_STRUCT(CommandResult { int32_t positions[5][4]; });
+
+PACKED_STRUCT(LatencyTest {
+    uint8_t write_id = 0xD0;
+    uint8_t read_id = 0xD0;
+    uint32_t id;
+});
+
+PACKED_STRUCT(LatencyTestResult {
+    PACKED_STRUCT({
+        uint32_t id;
+        uint32_t t0_spinal_rx;
+        uint32_t t1_spinal_tx;
+        uint32_t t2_joint_rx;
+        uint32_t t3_joint_tx;
+        uint32_t t4_spinal_rx;
+    })
+    joint_datas[20];
+
+    uint32_t t5_spinal_tx;
+    uint32_t t_usb_rx_tx;
 });
 
 }; // namespace pdo
