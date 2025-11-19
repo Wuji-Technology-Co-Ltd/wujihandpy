@@ -70,8 +70,7 @@ public:
     };
 
     WUJIHANDCPP_API explicit Handler(
-        uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t buffer_transfer_count,
-        size_t storage_unit_count);
+        uint16_t usb_vid, int32_t usb_pid, const char* serial_number, size_t storage_unit_count);
 
     WUJIHANDCPP_API ~Handler();
 
@@ -95,6 +94,9 @@ public:
         attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream);
 
     WUJIHANDCPP_API device::IRealtimeController* detach_realtime_controller();
+
+    WUJIHANDCPP_API void start_latency_test();
+    WUJIHANDCPP_API void stop_latency_test();
 
     WUJIHANDCPP_API Buffer8 get(int storage_id);
 

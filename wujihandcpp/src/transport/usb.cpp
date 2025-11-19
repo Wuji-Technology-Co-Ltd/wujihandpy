@@ -1,77 +1,135 @@
-#pragma once
-
 #include <cstdint>
 
 #include <atomic>
 #include <cstring>
 #include <format>
+#include <memory>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
+#include <tuple>
 #include <vector>
 
 #include <libusb.h>
 
 #include "logging/logging.hpp"
+#include "transport/transport.hpp"
 #include "utility/cross_os.hpp"
 #include "utility/final_action.hpp"
+#include "utility/ring_buffer.hpp"
 
-namespace wujihandcpp::driver {
+namespace wujihandcpp::transport {
 
-template <typename TransferPrefill>
-concept is_legal_transfer_prefill =
-    std::is_same_v<TransferPrefill, void> || alignof(TransferPrefill) == 1;
-
-template <typename Device>
-class Driver {
+class Usb : public ITransport {
 public:
-    template <typename TransferPrefill = void>
-    class AsyncTransmitBuffer;
-
-    explicit Driver(uint16_t usb_vid, int32_t usb_pid, const char* serial_number)
-        : logger_(logging::get_logger()) {
-        if (!init(usb_vid, usb_pid, serial_number)) {
+    explicit Usb(uint16_t usb_vid, int32_t usb_pid, const char* serial_number)
+        : logger_(logging::get_logger())
+        , free_transmit_transfers_(transmit_transfer_count_) {
+        if (!usb_init(usb_vid, usb_pid, serial_number)) {
             throw std::runtime_error{"Failed to init."};
         }
+
+        init_transmit_transfers();
+        event_thread_ = std::thread{[this]() { handle_events(); }};
     }
 
-    ~Driver() {
-        libusb_free_transfer(libusb_receive_transfer_);
+    Usb(const Usb&) = delete;
+    Usb& operator=(const Usb&) = delete;
+    Usb(Usb&&) = delete;
+    Usb& operator=(Usb&&) = delete;
+
+    ~Usb() override {
+        {
+            std::lock_guard guard{transmit_transfer_push_mutex_};
+            stop_handling_events_.store(true, std::memory_order::relaxed);
+        }
+        free_transmit_transfers_.pop_front_n([](TransferWrapper* wrapper) { delete wrapper; });
+
         libusb_release_interface(libusb_device_handle_, target_interface_);
         if constexpr (utility::is_linux())
             libusb_attach_kernel_driver(libusb_device_handle_, 0);
+
+        // libusb_close() reliably cancels all pending transfers and invokes their callbacks,
+        // avoiding race conditions present in other cancellation methods
         libusb_close(libusb_device_handle_);
+
+        if (event_thread_.joinable())
+            event_thread_.join();
+
         libusb_exit(libusb_context_);
     }
 
-    int usb_transmit(const std::byte* data, int length) {
-        int actual_length = -1;
-        auto libusb_data = reinterpret_cast<unsigned char*>(const_cast<std::byte*>(data));
-        int ret = libusb_bulk_transfer(
-            libusb_device_handle_, out_endpoint_, libusb_data, length, &actual_length, 500);
+    std::unique_ptr<IBuffer> request_transmit_buffer() noexcept override {
+        TransferWrapper* transfer = nullptr;
+        {
+            std::lock_guard guard{transmit_transfer_pop_mutex_};
+            free_transmit_transfers_.pop_front(
+                [&transfer](TransferWrapper*&& value) { transfer = value; });
+        }
+        if (!transfer)
+            return nullptr;
+
+        return std::unique_ptr<IBuffer>{transfer};
+    };
+
+    void transmit(std::unique_ptr<IBuffer> buffer, size_t size) override {
+        if (size > max_transfer_length_)
+            throw std::invalid_argument("Transmit size exceeds maximum transfer length");
+
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+        auto& transfer = static_cast<TransferWrapper*>(buffer.get())->transfer_;
+        transfer->length = static_cast<int>(size);
+
+        int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
-            if (ret == LIBUSB_ERROR_NO_DEVICE)
-                logger_.error("Failed to submit transmit transfer: Device disconnected.");
-            else
-                logger_.error(
-                    "Failed to submit transmit transfer: {} ({}).", ret, libusb_errname(ret));
+            throw std::runtime_error(
+                std::format(
+                    "Failed to submit transmit transfer: {} ({})", ret, libusb_errname(ret)));
         }
 
-        return actual_length;
+        // If success: Ownership is transferred to libusb
+        std::ignore = buffer.release();
     }
 
-    void handle_events() {
-        while (receive_transfer_busy_) {
-            libusb_handle_events(libusb_context_);
-        }
-    }
+    void receive(std::function<void(const std::byte*, size_t size)> callback) override {
+        if (!callback)
+            throw std::invalid_argument{"Callback function cannot be null"};
+        if (receive_callback_)
+            throw std::logic_error{"Receive function can only be called once"};
 
-    void stop_handling_events() {
-        handling_events_.store(false, std::memory_order::relaxed);
-        libusb_cancel_transfer(libusb_receive_transfer_);
-        // TODO: Very low probability of race condition.
-    }
+        receive_callback_ = std::move(callback);
+        init_receive_transfers();
+    };
 
 private:
-    bool init(uint16_t vendor_id, int32_t product_id, const char* serial_number) noexcept {
+    class TransferWrapper : public IBuffer {
+        friend class Usb;
+
+    public:
+        explicit TransferWrapper(Usb& self)
+            : self_(self)
+            , transfer_(self_.create_libusb_transfer()) {}
+
+        TransferWrapper(const TransferWrapper&) = delete;
+        TransferWrapper& operator=(const TransferWrapper&) = delete;
+        TransferWrapper(TransferWrapper&&) = delete;
+        TransferWrapper& operator=(TransferWrapper&&) = delete;
+
+        ~TransferWrapper() override { self_.destroy_libusb_transfer(transfer_); }
+
+        std::byte* data() noexcept override {
+            return reinterpret_cast<std::byte*>(transfer_->buffer);
+        }
+
+        size_t size() const noexcept override { return max_transfer_length_; }
+
+    private:
+        Usb& self_;
+
+        libusb_transfer* transfer_;
+    };
+
+    bool usb_init(uint16_t vendor_id, int32_t product_id, const char* serial_number) {
         int ret;
 
         ret = libusb_init(&libusb_context_);
@@ -98,30 +156,8 @@ private:
             logger_.error("Failed to claim interface: {} ({})", ret, libusb_errname(ret));
             return false;
         }
-        utility::FinalAction release_interface{
-            [this]() { libusb_release_interface(libusb_device_handle_, target_interface_); }};
 
-        libusb_receive_transfer_ = libusb_alloc_transfer(0);
-        if (!libusb_receive_transfer_) [[unlikely]] {
-            logger_.error("Failed to alloc receive transfer");
-            return false;
-        }
-
-        libusb_fill_bulk_transfer(
-            libusb_receive_transfer_, libusb_device_handle_, in_endpoint_,
-            reinterpret_cast<unsigned char*>(receive_buffer_), max_receive_length_,
-            [](libusb_transfer* transfer) {
-                static_cast<Driver*>(transfer->user_data)->usb_receive_complete_callback(transfer);
-            },
-            this, 0);
-        ret = libusb_submit_transfer(libusb_receive_transfer_);
-        if (ret != 0) [[unlikely]] {
-            logger_.error("Failed to submit receive transfer: {} ({})", ret, libusb_errname(ret));
-            return false;
-        }
-
-        // Libusb successfully initialized.
-        release_interface.disable();
+        // Libusb successfully initialized
         close_device_handle.disable();
         exit_libusb.disable();
         return true;
@@ -276,13 +312,84 @@ private:
         return j;
     }
 
-    void usb_receive_complete_callback(libusb_transfer* transfer) {
-        if (!handling_events_.load(std::memory_order::relaxed)) [[unlikely]] {
-            receive_transfer_busy_ = false;
+    void handle_events() {
+        while (active_transfers_.load(std::memory_order::relaxed)) {
+            libusb_handle_events(libusb_context_);
+        }
+    }
+
+    void init_transmit_transfers() {
+        TransferWrapper* transmit_transfers[transmit_transfer_count_] = {};
+        try {
+            for (auto& wrapper : transmit_transfers) {
+                wrapper = new TransferWrapper{*this};
+                auto transfer = wrapper->transfer_;
+
+                libusb_fill_bulk_transfer(
+                    transfer, libusb_device_handle_, out_endpoint_,
+                    new unsigned char[max_transfer_length_], 0,
+                    [](libusb_transfer* transfer) {
+                        auto wrapper = static_cast<TransferWrapper*>(transfer->user_data);
+                        wrapper->self_.usb_transmit_complete_callback(wrapper);
+                    },
+                    wrapper, 0);
+                transfer->flags = libusb_transfer_flags::LIBUSB_TRANSFER_FREE_BUFFER;
+            }
+        } catch (...) {
+            for (auto& wrapper : transmit_transfers)
+                delete wrapper;
+            throw;
+        }
+
+        auto iter = transmit_transfers;
+        free_transmit_transfers_.push_back_n(
+            [&iter]() { return *iter++; }, transmit_transfer_count_);
+    }
+
+    void init_receive_transfers() {
+        for (size_t i = 0; i < receive_transfer_count_; i++) {
+            auto transfer = create_libusb_transfer();
+
+            libusb_fill_bulk_transfer(
+                transfer, libusb_device_handle_, in_endpoint_,
+                new unsigned char[max_transfer_length_], max_transfer_length_,
+                [](libusb_transfer* transfer) {
+                    static_cast<Usb*>(transfer->user_data)->usb_receive_complete_callback(transfer);
+                },
+                this, 0);
+            transfer->flags = libusb_transfer_flags::LIBUSB_TRANSFER_FREE_BUFFER;
+
+            int ret = libusb_submit_transfer(transfer);
+            if (ret != 0) [[unlikely]] {
+                destroy_libusb_transfer(transfer);
+                throw std::runtime_error(
+                    std::format(
+                        "Failed to submit receive transfer: {} ({})", ret, libusb_errname(ret)));
+            }
+        }
+    }
+
+    void usb_transmit_complete_callback(TransferWrapper* wrapper) {
+        // Share mutex with teardown so destructor can block callbacks before draining the queue
+        std::lock_guard guard{transmit_transfer_push_mutex_};
+
+        if (stop_handling_events_.load(std::memory_order::relaxed)) [[unlikely]] {
+            delete wrapper;
             return;
         }
 
-        static_cast<Device*>(this)->receive_transfer_completed_callback(transfer);
+        free_transmit_transfers_.emplace_back(wrapper);
+    }
+
+    void usb_receive_complete_callback(libusb_transfer* transfer) {
+        if (stop_handling_events_.load(std::memory_order::relaxed)) [[unlikely]] {
+            destroy_libusb_transfer(transfer);
+            return;
+        }
+
+        if (transfer->actual_length > 0)
+            receive_callback_(
+                reinterpret_cast<std::byte*>(transfer->buffer), transfer->actual_length);
 
         int ret = libusb_submit_transfer(transfer);
         if (ret != 0) [[unlikely]] {
@@ -294,8 +401,24 @@ private:
                 logger_.error(
                     "Failed to re-submit receive transfer: {} ({}). Terminating...", ret,
                     libusb_errname(ret));
+            destroy_libusb_transfer(transfer);
+
+            // TODO: Replace abrupt termination with a flag and exception-based error handling
             std::terminate();
         }
+    }
+
+    libusb_transfer* create_libusb_transfer() {
+        auto transfer = libusb_alloc_transfer(0);
+        if (!transfer)
+            throw std::bad_alloc{};
+        active_transfers_.fetch_add(1, std::memory_order::relaxed);
+        return transfer;
+    }
+
+    void destroy_libusb_transfer(libusb_transfer* transfer) {
+        libusb_free_transfer(transfer);
+        active_transfers_.fetch_sub(1, std::memory_order::relaxed);
     }
 
     static constexpr const char* libusb_errname(int number) {
@@ -322,19 +445,30 @@ private:
     static constexpr unsigned char out_endpoint_ = 0x01;
     static constexpr unsigned char in_endpoint_ = 0x81;
 
-    static constexpr int max_transmit_length_ = 512;
-    static constexpr int max_receive_length_ = 512;
+    static constexpr int max_transfer_length_ = 512;
+
+    static constexpr size_t transmit_transfer_count_ = 64;
+    static constexpr size_t receive_transfer_count_ = 4;
 
     logging::Logger& logger_;
 
     libusb_context* libusb_context_;
     libusb_device_handle* libusb_device_handle_;
 
-    libusb_transfer* libusb_receive_transfer_;
-    std::byte receive_buffer_[max_receive_length_];
+    std::thread event_thread_;
 
-    std::atomic<bool> handling_events_ = true;
-    bool receive_transfer_busy_ = true;
+    std::atomic<int> active_transfers_ = 0;
+    std::atomic<bool> stop_handling_events_ = false;
+
+    utility::RingBuffer<TransferWrapper*> free_transmit_transfers_;
+    std::mutex transmit_transfer_pop_mutex_, transmit_transfer_push_mutex_;
+
+    std::function<void(const std::byte*, size_t size)> receive_callback_;
 };
 
-} // namespace wujihandcpp::driver
+std::unique_ptr<ITransport>
+    create_usb_transport(uint16_t usb_vid, int32_t usb_pid, const char* serial_number) {
+    return std::make_unique<Usb>(usb_vid, usb_pid, serial_number);
+}
+
+} // namespace wujihandcpp::transport
