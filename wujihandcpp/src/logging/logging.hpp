@@ -361,6 +361,8 @@ private:
             logger_->set_level(to_spdlog_level(config.log_level()));
             logger_->flush_on(spdlog::level::warn);
 
+            logger_->info("SDK v{} initialized", WUJIHANDCPP_VERSION);
+
             if (log_path_error.empty()) {
                 if (config.log_to_file())
                     logger_->info("Log files can be found at {}", log_path.string());
