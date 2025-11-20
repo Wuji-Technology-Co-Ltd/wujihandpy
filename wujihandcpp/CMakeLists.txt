@@ -12,7 +12,7 @@ execute_process(
 )
 
 # Extract version number if tag format is valid
-if(GIT_TAG_RESULT EQUAL 0 AND GIT_TAG MATCHES "^v([0-9]+\\.[0-9]+\\.[0-9]+)$")
+if(GIT_TAG_RESULT EQUAL 0 AND GIT_TAG MATCHES "^v.+$")
     string(REGEX REPLACE "^v" "" PROJECT_VERSION ${GIT_TAG})
     message(STATUS "Using Git tag version: ${PROJECT_VERSION}")
 else()
@@ -78,6 +78,7 @@ else()
 endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE BUILDING_WUJIHANDCPP)
+target_compile_definitions(${PROJECT_NAME} PUBLIC WUJIHANDCPP_VERSION="${PROJECT_VERSION}")
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
