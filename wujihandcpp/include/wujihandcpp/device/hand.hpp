@@ -3,8 +3,10 @@
 #include <cstdint>
 
 #include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "wujihandcpp/data/hand.hpp"
 #include "wujihandcpp/data/joint.hpp"
@@ -286,7 +288,35 @@ public:
 
     void disable_thread_safe_check() { handler_.disable_thread_safe_check(); }
 
+    // Raw SDO operations for debugging
+    // finger_id: 0-4 for fingers, -1 for Hand level
+    // joint_id: 0-3 for joints (ignored when finger_id=-1)
+    std::vector<std::byte> raw_sdo_read(
+        int finger_id, int joint_id, uint16_t index, uint8_t sub_index,
+        std::chrono::steady_clock::duration timeout = default_timeout) {
+        uint16_t full_index = index + calculate_index_offset(finger_id, joint_id);
+        return handler_.raw_sdo_read(full_index, sub_index, timeout);
+    }
+
+    void raw_sdo_write(
+        int finger_id, int joint_id, uint16_t index, uint8_t sub_index,
+        std::span<const std::byte> data,
+        std::chrono::steady_clock::duration timeout = default_timeout) {
+        uint16_t full_index = index + calculate_index_offset(finger_id, joint_id);
+        handler_.raw_sdo_write(full_index, sub_index, data, timeout);
+    }
+
 private:
+    static uint16_t calculate_index_offset(int finger_id, int joint_id) {
+        if (finger_id < 0)
+            return 0x0000; // Hand level
+        if (finger_id > 4)
+            throw std::invalid_argument("finger_id must be -1 to 4");
+        if (joint_id < 0 || joint_id > 3)
+            throw std::invalid_argument("joint_id must be 0 to 3");
+        return static_cast<uint16_t>(0x2000 + finger_id * 0x800 + joint_id * 0x100);
+    }
+
     void save_and_enable_joints(bool (&last_enabled)[5][4]) {
         Latch latch;
         for (int i = 0; i < 5; i++)

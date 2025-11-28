@@ -5,7 +5,9 @@
 #include <cstring>
 
 #include <chrono>
+#include <span>
 #include <type_traits>
+#include <vector>
 
 #include "wujihandcpp/device/controller.hpp"
 #include "wujihandcpp/utility/api.hpp"
@@ -101,6 +103,14 @@ public:
     WUJIHANDCPP_API Buffer8 get(int storage_id);
 
     WUJIHANDCPP_API void disable_thread_safe_check();
+
+    // Raw SDO operations for debugging
+    WUJIHANDCPP_API std::vector<std::byte> raw_sdo_read(
+        uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout);
+
+    WUJIHANDCPP_API void raw_sdo_write(
+        uint16_t index, uint8_t sub_index, std::span<const std::byte> data,
+        std::chrono::steady_clock::duration timeout);
 
 private:
     class Impl;
