@@ -351,7 +351,7 @@ private:
         uint8_t sub_index = 0;
 
         enum class Mode : uint8_t { NONE, READ, WRITE } mode = Mode::NONE;
-        enum class State : uint8_t { IDLE, PENDING, SUCCESS, FAILED } state = State::IDLE;
+        enum class State : uint8_t { IDLE, PENDING, READING, WRITING, SUCCESS, FAILED } state = State::IDLE;
 
         std::vector<std::byte> read_result;
         std::chrono::steady_clock::time_point timeout_point;
@@ -550,7 +550,7 @@ private:
                 continue;
             std::lock_guard lock{unit.mutex};
             if (unit.index == index && unit.sub_index == sub_index
-                && unit.state == RawSdoUnit::State::PENDING
+                && unit.state == RawSdoUnit::State::READING
                 && unit.mode == RawSdoUnit::Mode::READ) {
                 unit.read_result.resize(sizeof(T));
                 std::memcpy(unit.read_result.data(), &value, sizeof(T));
@@ -569,7 +569,7 @@ private:
                 continue;
             std::lock_guard lock{unit.mutex};
             if (unit.index == index && unit.sub_index == sub_index
-                && unit.state == RawSdoUnit::State::PENDING
+                && unit.state == RawSdoUnit::State::WRITING
                 && unit.mode == RawSdoUnit::Mode::WRITE) {
                 unit.state = RawSdoUnit::State::SUCCESS;
                 unit.cv.notify_one();
@@ -662,12 +662,21 @@ private:
                     continue;
 
                 std::lock_guard lock{unit.mutex};
-                if (unit.state == RawSdoUnit::State::PENDING) {
+                // Check timeout for PENDING, READING, or WRITING states
+                if (unit.state == RawSdoUnit::State::PENDING
+                    || unit.state == RawSdoUnit::State::READING
+                    || unit.state == RawSdoUnit::State::WRITING) {
                     if (now >= unit.timeout_point) {
                         unit.state = RawSdoUnit::State::FAILED;
                         unit.cv.notify_one();
-                    } else if (unit.mode == RawSdoUnit::Mode::READ) {
+                        continue;
+                    }
+                }
+                // Only send request once when in PENDING state
+                if (unit.state == RawSdoUnit::State::PENDING) {
+                    if (unit.mode == RawSdoUnit::Mode::READ) {
                         read_async_unchecked_internal(unit.index, unit.sub_index);
+                        unit.state = RawSdoUnit::State::READING;
                     } else if (unit.mode == RawSdoUnit::Mode::WRITE) {
                         // Send write request from sdo_thread (avoids data race on sdo_builder_)
                         if (unit.write_data_size == 1) {
@@ -687,6 +696,7 @@ private:
                             std::memcpy(&value, unit.write_data.data(), 8);
                             write_async_unchecked_internal(value, unit.index, unit.sub_index);
                         }
+                        unit.state = RawSdoUnit::State::WRITING;
                     }
                 }
             }
