@@ -74,6 +74,14 @@ PYBIND11_MODULE(_core, m) {
     hand.def("start_latency_test", &Hand::start_latency_test);
     hand.def("stop_latency_test", &Hand::stop_latency_test);
 
+    // Raw SDO operations for debugging
+    hand.def(
+        "raw_sdo_read", &Hand::raw_sdo_read, py::arg("finger_id"), py::arg("joint_id"),
+        py::arg("index"), py::arg("sub_index"), py::arg("timeout") = 0.5);
+    hand.def(
+        "raw_sdo_write", &Hand::raw_sdo_write, py::arg("finger_id"), py::arg("joint_id"),
+        py::arg("index"), py::arg("sub_index"), py::arg("data"), py::arg("timeout") = 0.5);
+
     using Finger = Wrapper<wujihandcpp::device::Finger>;
     auto finger = py::class_<Finger>(m, "Finger");
     hand.def("finger", &Hand::finger, py::arg("index"), py::keep_alive<0, 1>());

@@ -4,19 +4,24 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <bit>
 #include <chrono>
+#include <condition_variable>
 #include <format>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <numbers>
+#include <span>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
+#include <vector>
 
 #include <spdlog/fmt/bin_to_hex.h>
+#include <wujihandcpp/device/latch.hpp>
 #include <wujihandcpp/protocol/handler.hpp>
 #include <wujihandcpp/utility/api.hpp>
 
@@ -185,6 +190,111 @@ public:
 
     void disable_thread_safe_check() { operation_thread_id_ = std::thread::id{}; }
 
+    std::vector<std::byte>
+        raw_sdo_read(uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout) {
+        operation_thread_check();
+
+        // Find an available slot
+        RawSdoUnit* unit = nullptr;
+        for (auto& u : raw_sdo_units_) {
+            bool expected = false;
+            if (u.in_use.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+                unit = &u;
+                break;
+            }
+        }
+        if (!unit)
+            throw std::runtime_error("No available raw SDO slot. Too many concurrent operations.");
+
+        // Setup the unit
+        {
+            std::lock_guard lock{unit->mutex};
+            unit->index = index;
+            unit->sub_index = sub_index;
+            unit->mode = RawSdoUnit::Mode::READ;
+            unit->state = RawSdoUnit::State::PENDING;
+            unit->read_result.clear();
+            unit->timeout_point = std::chrono::steady_clock::now() + timeout;
+        }
+
+        // Wait for completion
+        std::vector<std::byte> result;
+        {
+            std::unique_lock lock{unit->mutex};
+            unit->cv.wait(lock, [&] {
+                return unit->state == RawSdoUnit::State::SUCCESS
+                    || unit->state == RawSdoUnit::State::FAILED;
+            });
+
+            if (unit->state == RawSdoUnit::State::SUCCESS) {
+                result = std::move(unit->read_result);
+            }
+            auto state = unit->state;
+            unit->state = RawSdoUnit::State::IDLE;
+            unit->mode = RawSdoUnit::Mode::NONE;
+            unit->in_use.store(false, std::memory_order_release);
+
+            if (state == RawSdoUnit::State::FAILED)
+                throw device::TimeoutError(std::format(
+                    "Raw SDO read timed out: index=0x{:04X}, sub_index={}", index, sub_index));
+        }
+
+        return result;
+    }
+
+    void raw_sdo_write(
+        uint16_t index, uint8_t sub_index, std::span<const std::byte> data,
+        std::chrono::steady_clock::duration timeout) {
+        operation_thread_check();
+
+        if (data.size() != 1 && data.size() != 2 && data.size() != 4 && data.size() != 8)
+            throw std::invalid_argument(
+                std::format("Raw SDO write data size must be 1, 2, 4, or 8 bytes, got {}", data.size()));
+
+        // Find an available slot
+        RawSdoUnit* unit = nullptr;
+        for (auto& u : raw_sdo_units_) {
+            bool expected = false;
+            if (u.in_use.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+                unit = &u;
+                break;
+            }
+        }
+        if (!unit)
+            throw std::runtime_error("No available raw SDO slot. Too many concurrent operations.");
+
+        // Setup the unit with cached write data (actual send is done by sdo_thread)
+        {
+            std::lock_guard lock{unit->mutex};
+            unit->index = index;
+            unit->sub_index = sub_index;
+            unit->mode = RawSdoUnit::Mode::WRITE;
+            unit->state = RawSdoUnit::State::PENDING;
+            unit->timeout_point = std::chrono::steady_clock::now() + timeout;
+            // Cache write data for sdo_thread to send
+            std::memcpy(unit->write_data.data(), data.data(), data.size());
+            unit->write_data_size = static_cast<uint8_t>(data.size());
+        }
+
+        // Wait for completion (sdo_thread will send the write request)
+        {
+            std::unique_lock lock{unit->mutex};
+            unit->cv.wait(lock, [&] {
+                return unit->state == RawSdoUnit::State::SUCCESS
+                    || unit->state == RawSdoUnit::State::FAILED;
+            });
+
+            auto state = unit->state;
+            unit->state = RawSdoUnit::State::IDLE;
+            unit->mode = RawSdoUnit::Mode::NONE;
+            unit->in_use.store(false, std::memory_order_release);
+
+            if (state == RawSdoUnit::State::FAILED)
+                throw device::TimeoutError(std::format(
+                    "Raw SDO write timed out: index=0x{:04X}, sub_index={}", index, sub_index));
+        }
+    }
+
 private:
     struct Operation {
         enum class Mode : uint16_t {
@@ -230,6 +340,28 @@ private:
         Buffer8 callback_context;
     };
     static_assert(sizeof(StorageUnit) == 64);
+
+    // Raw SDO unit for debugging - allows arbitrary index/sub_index access
+    struct RawSdoUnit {
+        std::mutex mutex;
+        std::condition_variable cv;
+
+        std::atomic<bool> in_use{false};
+        uint16_t index = 0;
+        uint8_t sub_index = 0;
+
+        enum class Mode : uint8_t { NONE, READ, WRITE } mode = Mode::NONE;
+        enum class State : uint8_t { IDLE, PENDING, READING, WRITING, SUCCESS, FAILED } state = State::IDLE;
+
+        std::vector<std::byte> read_result;
+        std::chrono::steady_clock::time_point timeout_point;
+
+        // Write data cache - used to defer write operations to sdo_thread
+        std::array<std::byte, 8> write_data{};
+        uint8_t write_data_size = 0;
+    };
+
+    static constexpr size_t RAW_SDO_SLOT_COUNT = 4;
 
     void operation_thread_check() const {
         if (operation_thread_id_ == std::thread::id{})
@@ -335,6 +467,11 @@ private:
     void read_sdo_operation_read_success(const std::byte*& pointer, const std::byte* sentinel) {
         const auto& data =
             read_frame_struct<protocol::sdo::ReadResultSuccess<T>>(pointer, sentinel);
+
+        // First check if this is a raw SDO operation response
+        if (handle_raw_sdo_read_response(data.header.index, data.header.sub_index, data.value))
+            return;
+
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
         auto operation = storage.operation.load(std::memory_order::acquire);
 
@@ -375,6 +512,10 @@ private:
     void read_sdo_operation_write_success(const std::byte*& pointer, const std::byte* sentinel) {
         const auto& data = read_frame_struct<protocol::sdo::WriteResultSuccess>(pointer, sentinel);
 
+        // First check if this is a raw SDO operation response
+        if (handle_raw_sdo_write_response(data.header.index, data.header.sub_index))
+            return;
+
         StorageUnit& storage = find_storage_by_index(data.header.index, data.header.sub_index);
 
         auto operation = storage.operation.load(std::memory_order::acquire);
@@ -399,6 +540,43 @@ private:
             throw std::runtime_error{std::format(
                 "SDO object not found: index=0x{:04X}, sub-index=0x{:02X}", index, sub_index)};
         return *it->second;
+    }
+
+    // Thread-safe helper to handle raw SDO read response
+    template <typename T>
+    bool handle_raw_sdo_read_response(uint16_t index, uint8_t sub_index, T value) {
+        for (auto& unit : raw_sdo_units_) {
+            if (!unit.in_use.load(std::memory_order_acquire))
+                continue;
+            std::lock_guard lock{unit.mutex};
+            if (unit.index == index && unit.sub_index == sub_index
+                && unit.state == RawSdoUnit::State::READING
+                && unit.mode == RawSdoUnit::Mode::READ) {
+                unit.read_result.resize(sizeof(T));
+                std::memcpy(unit.read_result.data(), &value, sizeof(T));
+                unit.state = RawSdoUnit::State::SUCCESS;
+                unit.cv.notify_one();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Thread-safe helper to handle raw SDO write response
+    bool handle_raw_sdo_write_response(uint16_t index, uint8_t sub_index) {
+        for (auto& unit : raw_sdo_units_) {
+            if (!unit.in_use.load(std::memory_order_acquire))
+                continue;
+            std::lock_guard lock{unit.mutex};
+            if (unit.index == index && unit.sub_index == sub_index
+                && unit.state == RawSdoUnit::State::WRITING
+                && unit.mode == RawSdoUnit::Mode::WRITE) {
+                unit.state = RawSdoUnit::State::SUCCESS;
+                unit.cv.notify_one();
+                return true;
+            }
+        }
+        return false;
     }
 
     void sdo_thread_main(const std::stop_token& stop_token) {
@@ -477,6 +655,52 @@ private:
                             storage.info.index, storage.info.sub_index);
                 }
             }
+
+            // Process raw SDO operations
+            for (auto& unit : raw_sdo_units_) {
+                if (!unit.in_use.load(std::memory_order_acquire))
+                    continue;
+
+                std::lock_guard lock{unit.mutex};
+                // Check timeout for PENDING, READING, or WRITING states
+                if (unit.state == RawSdoUnit::State::PENDING
+                    || unit.state == RawSdoUnit::State::READING
+                    || unit.state == RawSdoUnit::State::WRITING) {
+                    if (now >= unit.timeout_point) {
+                        unit.state = RawSdoUnit::State::FAILED;
+                        unit.cv.notify_one();
+                        continue;
+                    }
+                }
+                // Only send request once when in PENDING state
+                if (unit.state == RawSdoUnit::State::PENDING) {
+                    if (unit.mode == RawSdoUnit::Mode::READ) {
+                        read_async_unchecked_internal(unit.index, unit.sub_index);
+                        unit.state = RawSdoUnit::State::READING;
+                    } else if (unit.mode == RawSdoUnit::Mode::WRITE) {
+                        // Send write request from sdo_thread (avoids data race on sdo_builder_)
+                        if (unit.write_data_size == 1) {
+                            uint8_t value;
+                            std::memcpy(&value, unit.write_data.data(), 1);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        } else if (unit.write_data_size == 2) {
+                            uint16_t value;
+                            std::memcpy(&value, unit.write_data.data(), 2);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        } else if (unit.write_data_size == 4) {
+                            uint32_t value;
+                            std::memcpy(&value, unit.write_data.data(), 4);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        } else if (unit.write_data_size == 8) {
+                            uint64_t value;
+                            std::memcpy(&value, unit.write_data.data(), 8);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        }
+                        unit.state = RawSdoUnit::State::WRITING;
+                    }
+                }
+            }
+
             sdo_builder_.finalize();
 
             std::this_thread::sleep_for(update_period);
@@ -645,6 +869,8 @@ private:
 
     std::unique_ptr<device::IRealtimeController> realtime_controller_;
     std::jthread pdo_thread_;
+
+    std::array<RawSdoUnit, RAW_SDO_SLOT_COUNT> raw_sdo_units_;
 };
 
 WUJIHANDCPP_API Handler::Handler(
@@ -698,6 +924,17 @@ WUJIHANDCPP_API Handler::Buffer8 Handler::get(int storage_id) { return impl_->ge
 
 WUJIHANDCPP_API void Handler::disable_thread_safe_check() {
     return impl_->disable_thread_safe_check();
+}
+
+WUJIHANDCPP_API std::vector<std::byte> Handler::raw_sdo_read(
+    uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout) {
+    return impl_->raw_sdo_read(index, sub_index, timeout);
+}
+
+WUJIHANDCPP_API void Handler::raw_sdo_write(
+    uint16_t index, uint8_t sub_index, std::span<const std::byte> data,
+    std::chrono::steady_clock::duration timeout) {
+    impl_->raw_sdo_write(index, sub_index, data, timeout);
 }
 
 } // namespace wujihandcpp::protocol

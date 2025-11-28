@@ -7,8 +7,10 @@
 #include <chrono>
 #include <format>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
+#include <vector>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -258,6 +260,32 @@ public:
 
     void start_latency_test() { T::start_latency_test(); }
     void stop_latency_test() { T::stop_latency_test(); }
+
+    // Raw SDO operations - only available for Hand
+    py::bytes raw_sdo_read(int finger_id, int joint_id, uint16_t index, uint8_t sub_index, double timeout)
+        requires std::is_same_v<T, wujihandcpp::device::Hand>
+    {
+        std::vector<std::byte> result;
+        {
+            py::gil_scoped_release release;
+            result = T::raw_sdo_read(finger_id, joint_id, index, sub_index, seconds_to_duration(timeout));
+        }
+        return py::bytes(reinterpret_cast<const char*>(result.data()), result.size());
+    }
+
+    void raw_sdo_write(int finger_id, int joint_id, uint16_t index, uint8_t sub_index, py::bytes data, double timeout)
+        requires std::is_same_v<T, wujihandcpp::device::Hand>
+    {
+        // Convert py::bytes to std::string while GIL is held
+        std::string buffer = static_cast<std::string>(data);
+
+        py::gil_scoped_release release;
+        T::raw_sdo_write(
+            finger_id, joint_id, index, sub_index,
+            std::span<const std::byte>(
+                reinterpret_cast<const std::byte*>(buffer.data()), buffer.size()),
+            seconds_to_duration(timeout));
+    }
 
     template <typename Data>
     static void register_py_interface(py::class_<Wrapper>& py_class, const std::string& name) {
