@@ -263,7 +263,7 @@ public:
         if (!unit)
             throw std::runtime_error("No available raw SDO slot. Too many concurrent operations.");
 
-        // Setup the unit and send write request
+        // Setup the unit with cached write data (actual send is done by sdo_thread)
         {
             std::lock_guard lock{unit->mutex};
             unit->index = index;
@@ -271,29 +271,12 @@ public:
             unit->mode = RawSdoUnit::Mode::WRITE;
             unit->state = RawSdoUnit::State::PENDING;
             unit->timeout_point = std::chrono::steady_clock::now() + timeout;
+            // Cache write data for sdo_thread to send
+            std::memcpy(unit->write_data.data(), data.data(), data.size());
+            unit->write_data_size = static_cast<uint8_t>(data.size());
         }
 
-        // Send the write request
-        if (data.size() == 1) {
-            uint8_t value;
-            std::memcpy(&value, data.data(), 1);
-            write_async_unchecked_internal(value, index, sub_index);
-        } else if (data.size() == 2) {
-            uint16_t value;
-            std::memcpy(&value, data.data(), 2);
-            write_async_unchecked_internal(value, index, sub_index);
-        } else if (data.size() == 4) {
-            uint32_t value;
-            std::memcpy(&value, data.data(), 4);
-            write_async_unchecked_internal(value, index, sub_index);
-        } else if (data.size() == 8) {
-            uint64_t value;
-            std::memcpy(&value, data.data(), 8);
-            write_async_unchecked_internal(value, index, sub_index);
-        }
-        sdo_builder_.finalize();
-
-        // Wait for completion
+        // Wait for completion (sdo_thread will send the write request)
         {
             std::unique_lock lock{unit->mutex};
             unit->cv.wait(lock, [&] {
@@ -372,6 +355,10 @@ private:
 
         std::vector<std::byte> read_result;
         std::chrono::steady_clock::time_point timeout_point;
+
+        // Write data cache - used to defer write operations to sdo_thread
+        std::array<std::byte, 8> write_data{};
+        uint8_t write_data_size = 0;
     };
 
     static constexpr size_t RAW_SDO_SLOT_COUNT = 4;
@@ -682,7 +669,24 @@ private:
                     } else if (unit.mode == RawSdoUnit::Mode::READ) {
                         read_async_unchecked_internal(unit.index, unit.sub_index);
                     } else if (unit.mode == RawSdoUnit::Mode::WRITE) {
-                        // Write request is already sent when starting
+                        // Send write request from sdo_thread (avoids data race on sdo_builder_)
+                        if (unit.write_data_size == 1) {
+                            uint8_t value;
+                            std::memcpy(&value, unit.write_data.data(), 1);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        } else if (unit.write_data_size == 2) {
+                            uint16_t value;
+                            std::memcpy(&value, unit.write_data.data(), 2);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        } else if (unit.write_data_size == 4) {
+                            uint32_t value;
+                            std::memcpy(&value, unit.write_data.data(), 4);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        } else if (unit.write_data_size == 8) {
+                            uint64_t value;
+                            std::memcpy(&value, unit.write_data.data(), 8);
+                            write_async_unchecked_internal(value, unit.index, unit.sub_index);
+                        }
                     }
                 }
             }

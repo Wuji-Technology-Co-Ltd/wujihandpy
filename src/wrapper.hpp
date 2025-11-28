@@ -277,12 +277,14 @@ public:
     void raw_sdo_write(int finger_id, int joint_id, uint16_t index, uint8_t sub_index, py::bytes data, double timeout)
         requires std::is_same_v<T, wujihandcpp::device::Hand>
     {
+        // Convert py::bytes to std::string while GIL is held
+        std::string buffer = static_cast<std::string>(data);
+
         py::gil_scoped_release release;
-        std::string_view data_view = data;
         T::raw_sdo_write(
             finger_id, joint_id, index, sub_index,
             std::span<const std::byte>(
-                reinterpret_cast<const std::byte*>(data_view.data()), data_view.size()),
+                reinterpret_cast<const std::byte*>(buffer.data()), buffer.size()),
             seconds_to_duration(timeout));
     }
 

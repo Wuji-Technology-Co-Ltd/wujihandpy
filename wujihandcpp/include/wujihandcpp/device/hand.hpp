@@ -308,9 +308,9 @@ public:
 
 private:
     static uint16_t calculate_index_offset(int finger_id, int joint_id) {
-        if (finger_id < 0)
+        if (finger_id == -1)
             return 0x0000; // Hand level
-        if (finger_id > 4)
+        if (finger_id < -1 || finger_id > 4)
             throw std::invalid_argument("finger_id must be -1 to 4");
         if (joint_id < 0 || joint_id > 3)
             throw std::invalid_argument("joint_id must be 0 to 3");
