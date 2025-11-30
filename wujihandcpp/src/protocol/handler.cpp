@@ -190,8 +190,8 @@ public:
 
     void disable_thread_safe_check() { operation_thread_id_ = std::thread::id{}; }
 
-    std::vector<std::byte>
-        raw_sdo_read(uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout) {
+    std::vector<std::byte> raw_sdo_read(
+        uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout) {
         operation_thread_check();
 
         // Find an available slot
@@ -235,8 +235,9 @@ public:
             unit->in_use.store(false, std::memory_order_release);
 
             if (state == RawSdoUnit::State::FAILED)
-                throw device::TimeoutError(std::format(
-                    "Raw SDO read timed out: index=0x{:04X}, sub_index={}", index, sub_index));
+                throw device::TimeoutError(
+                    std::format(
+                        "Raw SDO read timed out: index=0x{:04X}, sub_index={}", index, sub_index));
         }
 
         return result;
@@ -249,7 +250,8 @@ public:
 
         if (data.size() != 1 && data.size() != 2 && data.size() != 4 && data.size() != 8)
             throw std::invalid_argument(
-                std::format("Raw SDO write data size must be 1, 2, 4, or 8 bytes, got {}", data.size()));
+                std::format(
+                    "Raw SDO write data size must be 1, 2, 4, or 8 bytes, got {}", data.size()));
 
         // Find an available slot
         RawSdoUnit* unit = nullptr;
@@ -290,8 +292,9 @@ public:
             unit->in_use.store(false, std::memory_order_release);
 
             if (state == RawSdoUnit::State::FAILED)
-                throw device::TimeoutError(std::format(
-                    "Raw SDO write timed out: index=0x{:04X}, sub_index={}", index, sub_index));
+                throw device::TimeoutError(
+                    std::format(
+                        "Raw SDO write timed out: index=0x{:04X}, sub_index={}", index, sub_index));
         }
     }
 
@@ -351,7 +354,14 @@ private:
         uint8_t sub_index = 0;
 
         enum class Mode : uint8_t { NONE, READ, WRITE } mode = Mode::NONE;
-        enum class State : uint8_t { IDLE, PENDING, READING, WRITING, SUCCESS, FAILED } state = State::IDLE;
+        enum class State : uint8_t {
+            IDLE,
+            PENDING,
+            READING,
+            WRITING,
+            SUCCESS,
+            FAILED
+        } state = State::IDLE;
 
         std::vector<std::byte> read_result;
         std::chrono::steady_clock::time_point timeout_point;
