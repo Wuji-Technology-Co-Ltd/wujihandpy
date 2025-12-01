@@ -125,6 +125,20 @@ public:
             std::memory_order::release);
     }
 
+    auto realtime_get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
+        return pdo_read_result_;
+    }
+
+    void realtime_set_joint_target_position(const double (&positions)[5][4]) {
+        operation_thread_check();
+
+        if (realtime_controller_) [[unlikely]]
+            std::terminate(); // Logically impossible, only for protection
+
+        pdo_write_async_unchecked(
+            false, positions, 0); // TODO: Update According to the specific protocol
+    }
+
     void attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream) {
         operation_thread_check();
 
@@ -595,6 +609,7 @@ private:
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(1.0 / update_rate));
 
+        unsigned int update_index = 0;
         while (!stop_token.stop_requested()) {
             auto now = std::chrono::steady_clock::now();
 
@@ -614,6 +629,13 @@ private:
                     storage.operation.store(operation, std::memory_order::release);
                     if (callback)
                         callback(context, true);
+                }
+
+                if (update_index % 127 == 0
+                    && storage.info.policy
+                           & Handler::StorageInfo::TPDO_PROACTIVELY_REPORT_HEARTBEAT) {
+                    // TODO: Update According to the specific protocol
+                    write_async_unchecked(Buffer8{}, static_cast<int>(i), 0);
                 }
 
                 if (operation.state == Operation::State::WAITING) {
@@ -714,6 +736,7 @@ private:
             sdo_builder_.finalize();
 
             std::this_thread::sleep_for(update_period);
+            update_index++;
         }
     }
 
@@ -724,8 +747,12 @@ private:
             const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
 
             for (int i = 0; i < 5; i++)
-                for (int j = 0; j < 4; j++)
-                    pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
+                for (int j = 0; j < 4; j++) {
+                    double value = extract_raw_position(data.positions[i][j]);
+                    if (j == 0 && i != 0)
+                        value = -value;
+                    pdo_read_result_[i][j].store(value, std::memory_order::relaxed);
+                }
 
             pdo_read_result_version_.store(
                 pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
@@ -757,13 +784,9 @@ private:
             utility::TickExecutor{[&](const utility::TickContext& context) {
                 device::IRealtimeController::JointPositions positions;
                 for (int i = 0; i < 5; i++)
-                    for (int j = 0; j < 4; j++) {
-                        auto& value = positions.value[i][j];
-                        value = extract_raw_position(
-                            pdo_read_result_[i][j].load(std::memory_order::relaxed));
-                        if (j == 0 && i != 0)
-                            value = -value;
-                    }
+                    for (int j = 0; j < 4; j++)
+                        positions.value[i][j] =
+                            pdo_read_result_[i][j].load(std::memory_order::relaxed);
 
                 auto target_positions = realtime_controller_->step(&positions);
 
@@ -865,7 +888,7 @@ private:
     };
     std::map<uint32_t, StorageUnit*> index_storage_map_;
 
-    std::atomic<int32_t> pdo_read_result_[5][4];
+    std::atomic<double> pdo_read_result_[5][4];
     std::atomic<uint64_t> pdo_read_result_version_ = 0;
 
     std::unique_ptr<transport::ITransport> transport_;
@@ -915,6 +938,15 @@ WUJIHANDCPP_API void Handler::write_async(
     Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,
     void (*callback)(Buffer8 context, bool success), Buffer8 callback_context) {
     impl_->write_async(data, storage_id, timeout, callback, callback_context);
+}
+
+WUJIHANDCPP_API auto Handler::realtime_get_joint_actual_position()
+    -> const std::atomic<double> (&)[5][4] {
+    return impl_->realtime_get_joint_actual_position();
+}
+
+WUJIHANDCPP_API void Handler::realtime_set_joint_target_position(const double (&positions)[5][4]) {
+    return impl_->realtime_set_joint_target_position(positions);
 }
 
 WUJIHANDCPP_API void Handler::attach_realtime_controller(

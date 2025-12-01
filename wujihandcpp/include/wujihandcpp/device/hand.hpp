@@ -14,6 +14,7 @@
 #include "wujihandcpp/device/data_operator.hpp"
 #include "wujihandcpp/device/data_tuple.hpp"
 #include "wujihandcpp/device/finger.hpp"
+#include "wujihandcpp/filter/low_pass.hpp"
 #include "wujihandcpp/protocol/handler.hpp"
 #include "wujihandcpp/utility/logging.hpp"
 
@@ -22,85 +23,6 @@ namespace device {
 
 class Hand : public DataOperator<Hand> {
     friend class DataOperator;
-
-    template <typename FilterT, bool upstream_enabled>
-    class ControllerOperator;
-
-    template <typename FilterT>
-    class ControllerOperator<FilterT, false> final {
-    public:
-        explicit ControllerOperator(Hand& hand, FilteredController<FilterT, false>& controller)
-            : hand_(hand)
-            , controller_(&controller) {}
-
-        ControllerOperator(const ControllerOperator&) = delete;
-        ControllerOperator& operator=(const ControllerOperator&) = delete;
-
-        ControllerOperator(ControllerOperator&& other) noexcept
-            : hand_(other.hand_)
-            , controller_(other.controller_) {
-            other.controller_ = nullptr;
-        }
-        ControllerOperator& operator=(ControllerOperator&&) = delete;
-
-        ~ControllerOperator() {
-            if (!controller_)
-                return;
-            try {
-                hand_.detach_realtime_controller();
-            } catch (...) {
-                // TODO: Add log here
-            }
-        }
-
-        void set_joint_target_position(const double (&positions)[5][4]) {
-            controller_->set(positions);
-        }
-
-    private:
-        Hand& hand_;
-        FilteredController<FilterT, false>* controller_;
-    };
-
-    template <typename FilterT>
-    class ControllerOperator<FilterT, true> final {
-    public:
-        explicit ControllerOperator(Hand& hand, FilteredController<FilterT, true>& controller)
-            : hand_(hand)
-            , controller_(&controller) {}
-
-        ControllerOperator(const ControllerOperator&) = delete;
-        ControllerOperator& operator=(const ControllerOperator&) = delete;
-
-        ControllerOperator(ControllerOperator&& other) noexcept
-            : hand_(other.hand_)
-            , controller_(other.controller_) {
-            other.controller_ = nullptr;
-        }
-        ControllerOperator& operator=(ControllerOperator&&) = delete;
-
-        ~ControllerOperator() {
-            if (!controller_)
-                return;
-            try {
-                hand_.detach_realtime_controller();
-            } catch (...) {
-                // TODO: Add log here
-            }
-        }
-
-        auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
-            return controller_->get();
-        }
-
-        void set_joint_target_position(const double (&positions)[5][4]) {
-            controller_->set(positions);
-        }
-
-    private:
-        Hand& hand_;
-        FilteredController<FilterT, true>* controller_;
-    };
 
 public:
     explicit Hand(
@@ -115,7 +37,7 @@ public:
 
             write<data::joint::Enabled>(false);
             Latch latch;
-            write_async<data::joint::ControlMode>(latch, 6);
+            write_async<data::joint::ControlMode>(latch, feature_firmware_filter_ ? 9 : 6);
             write_async<data::joint::CurrentLimit>(latch, 1000);
             latch.wait();
         } catch (const TimeoutError&) {
@@ -178,6 +100,9 @@ public:
                 logging::log(logging::Level::WARN, warning_msg, sizeof(warning_msg) - 1);
             }
         }
+        
+        if (hand_version > data::FirmwareVersionData{3, 3, 0}) // TODO: Update actual version
+            feature_firmware_filter_ = true;
     }
 
     Finger finger_thumb() { return finger(0); }
@@ -192,74 +117,61 @@ public:
         return sub(index);
     }
 
-    template <bool enable_upstream, typename FilterT>
-    SDK_CPP20_REQUIRES(requires(const FilterT& f, typename FilterT::Unit& u, double v) {
-        { u.reset(f, v) };
-        { u.input(f, v) };
-        { u.step(f) } -> std::convertible_to<double>;
-    })
-    auto realtime_controller(const FilterT& filter)
-        -> ControllerOperator<FilterT, enable_upstream> {
-        bool last_enabled[5][4];
-        save_and_enable_joints(last_enabled);
-        read<data::joint::ActualPosition>();
-        revert_enabled_joints(last_enabled);
-
-        double positions[5][4];
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 4; j++)
-                positions[i][j] = finger(i).joint(j).get<data::joint::ActualPosition>();
-
-        auto controller =
-            std::make_unique<FilteredController<FilterT, enable_upstream>>(positions, filter);
-        auto controller_operator = ControllerOperator<FilterT, enable_upstream>(*this, *controller);
-        attach_realtime_controller(std::move(controller), enable_upstream);
-
-        return controller_operator;
+    auto realtime_get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
+        return handler_.realtime_get_joint_actual_position();
     }
 
-    void attach_realtime_controller(
-        std::unique_ptr<IRealtimeController> controller, bool enable_upstream) {
-        if (!controller)
-            throw std::invalid_argument("Controller pointer must not be null.");
-
-        bool last_enabled[5][4];
-        save_and_disable_joints(last_enabled);
-
-        {
-            Latch latch;
-            write_async<data::joint::ControlMode>(latch, 5);
-            write_async<data::hand::RPdoId>(latch, 0x01);
-            if (enable_upstream)
-                write_async<data::hand::TPdoId>(latch, 0x01);
-            else
-                write_async<data::hand::TPdoId>(latch, 0x00);
-            write_async<data::hand::PdoInterval>(latch, 2000);
-            write_async<data::hand::PdoEnabled>(latch, 1);
-            latch.wait();
-        }
-
-        revert_disabled_joints(last_enabled);
-
-        handler_.attach_realtime_controller(controller.get(), enable_upstream);
-        auto ignore = controller.release();
-        (void)ignore;
+    void realtime_set_joint_target_position(const double (&positions)[5][4]) {
+        return handler_.realtime_set_joint_target_position(positions);
     }
 
-    std::unique_ptr<IRealtimeController> detach_realtime_controller() {
-        bool last_enabled[5][4];
-        save_and_disable_joints(last_enabled);
+    template <bool enable_upstream>
+    auto realtime_controller(const filter::LowPass& filter) -> std::unique_ptr<IController> {
+        if (feature_firmware_filter_) {
+            // TODO: Warn Depreciated
+            // TODO: Config firmware filter by SDO
 
-        {
-            Latch latch;
-            write_async<data::joint::ControlMode>(latch, 6);
-            write_async<data::hand::PdoEnabled>(latch, 0);
-            latch.wait();
+            class CompatibleControllerOperator : public IController {
+            public:
+                explicit CompatibleControllerOperator(Hand& hand)
+                    : hand_(hand) {}
+
+                ~CompatibleControllerOperator() override = default;
+
+                auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] override {
+                    return hand_.realtime_get_joint_actual_position();
+                }
+
+                void set_joint_target_position(const double (&positions)[5][4]) override {
+                    hand_.realtime_set_joint_target_position(positions);
+                }
+
+            private:
+                Hand& hand_;
+            };
+
+            return std::make_unique<CompatibleControllerOperator>(*this);
+        } else {
+            bool last_enabled[5][4];
+            save_and_enable_joints(last_enabled);
+            read<data::joint::ActualPosition>();
+            revert_enabled_joints(last_enabled);
+
+            double positions[5][4];
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
+                    positions[i][j] = finger(i).joint(j).get<data::joint::ActualPosition>();
+
+            auto controller =
+                std::make_unique<FilteredController<filter::LowPass, enable_upstream>>(
+                    positions, filter);
+            auto controller_operator =
+                std::make_unique<FilteredControllerOperator<filter::LowPass, enable_upstream>>(
+                    *this, *controller);
+            attach_realtime_controller(std::move(controller), enable_upstream);
+
+            return controller_operator;
         }
-
-        revert_disabled_joints(last_enabled);
-
-        return std::unique_ptr<IRealtimeController>{handler_.detach_realtime_controller()};
     }
 
     void start_latency_test() {
@@ -314,6 +226,131 @@ public:
     }
 
 private:
+    template <typename FilterT, bool upstream_enabled>
+    class FilteredControllerOperator;
+
+    template <typename FilterT>
+    class FilteredControllerOperator<FilterT, false> : public IController {
+    public:
+        explicit FilteredControllerOperator(
+            Hand& hand, FilteredController<FilterT, false>& controller)
+            : hand_(hand)
+            , controller_(&controller) {}
+
+        FilteredControllerOperator(const FilteredControllerOperator&) = delete;
+        FilteredControllerOperator& operator=(const FilteredControllerOperator&) = delete;
+
+        FilteredControllerOperator(FilteredControllerOperator&& other) noexcept
+            : hand_(other.hand_)
+            , controller_(other.controller_) {
+            other.controller_ = nullptr;
+        }
+        FilteredControllerOperator& operator=(FilteredControllerOperator&&) = delete;
+
+        ~FilteredControllerOperator() override {
+            if (!controller_)
+                return;
+            try {
+                hand_.detach_realtime_controller();
+            } catch (...) {
+                // TODO: Add log here
+            }
+        }
+
+        void set_joint_target_position(const double (&positions)[5][4]) override {
+            controller_->set(positions);
+        }
+
+    private:
+        Hand& hand_;
+        FilteredController<FilterT, false>* controller_;
+    };
+
+    template <typename FilterT>
+    class FilteredControllerOperator<FilterT, true> : public IController {
+    public:
+        explicit FilteredControllerOperator(
+            Hand& hand, FilteredController<FilterT, true>& controller)
+            : hand_(hand)
+            , controller_(&controller) {}
+
+        FilteredControllerOperator(const FilteredControllerOperator&) = delete;
+        FilteredControllerOperator& operator=(const FilteredControllerOperator&) = delete;
+
+        FilteredControllerOperator(FilteredControllerOperator&& other) noexcept
+            : hand_(other.hand_)
+            , controller_(other.controller_) {
+            other.controller_ = nullptr;
+        }
+        FilteredControllerOperator& operator=(FilteredControllerOperator&&) = delete;
+
+        ~FilteredControllerOperator() override {
+            if (!controller_)
+                return;
+            try {
+                hand_.detach_realtime_controller();
+            } catch (...) {
+                // TODO: Add log here
+            }
+        }
+
+        auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] override {
+            return controller_->get();
+        }
+
+        void set_joint_target_position(const double (&positions)[5][4]) override {
+            controller_->set(positions);
+        }
+
+    private:
+        Hand& hand_;
+        FilteredController<FilterT, true>* controller_;
+    };
+
+    void attach_realtime_controller(
+        std::unique_ptr<IRealtimeController> controller, bool enable_upstream) {
+        if (!controller)
+            throw std::invalid_argument("Controller pointer must not be null.");
+
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
+
+        {
+            Latch latch;
+            write_async<data::joint::ControlMode>(latch, 5);
+            write_async<data::hand::RPdoId>(latch, 0x01);
+            if (enable_upstream)
+                write_async<data::hand::TPdoId>(latch, 0x01);
+            else
+                write_async<data::hand::TPdoId>(latch, 0x00);
+            write_async<data::hand::PdoInterval>(latch, 2000);
+            write_async<data::hand::PdoEnabled>(latch, 1);
+            latch.wait();
+        }
+
+        revert_disabled_joints(last_enabled);
+
+        handler_.attach_realtime_controller(controller.get(), enable_upstream);
+        auto ignore = controller.release();
+        (void)ignore;
+    }
+
+    std::unique_ptr<IRealtimeController> detach_realtime_controller() {
+        bool last_enabled[5][4];
+        save_and_disable_joints(last_enabled);
+
+        {
+            Latch latch;
+            write_async<data::joint::ControlMode>(latch, 6);
+            write_async<data::hand::PdoEnabled>(latch, 0);
+            latch.wait();
+        }
+
+        revert_disabled_joints(last_enabled);
+
+        return std::unique_ptr<IRealtimeController>{handler_.detach_realtime_controller()};
+    }
+
     static uint16_t calculate_index_offset(int finger_id, int joint_id) {
         if (finger_id == -1)
             return 0x0000; // Hand level
@@ -373,6 +410,8 @@ private:
         data::hand::PdoInterval, data::hand::RPdoTriggerOffset, data::hand::TPdoTriggerOffset>;
 
     protocol::Handler handler_;
+
+    bool feature_firmware_filter_ = false;
 
     static constexpr uint16_t index_offset_ = 0x0000;
     static constexpr int storage_offset_ = 0;

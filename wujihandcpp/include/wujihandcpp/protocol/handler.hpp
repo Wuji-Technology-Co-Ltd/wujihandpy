@@ -42,6 +42,7 @@ public:
             POSITION_REVERSED = 1ul << 3,
             VELOCITY = 1ul << 4,
             VELOCITY_REVERSED = 1ul << 5,
+            TPDO_PROACTIVELY_REPORT_HEARTBEAT = 1ul << 6
         };
         uint32_t policy : 30;
     };
@@ -91,6 +92,11 @@ public:
     WUJIHANDCPP_API void write_async(
         Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,
         void (*callback)(Buffer8 context, bool success), Buffer8 callback_context);
+
+    WUJIHANDCPP_API auto realtime_get_joint_actual_position()
+        -> const std::atomic<double> (&)[5][4];
+
+    WUJIHANDCPP_API void realtime_set_joint_target_position(const double (&positions)[5][4]);
 
     WUJIHANDCPP_API void
         attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream);
