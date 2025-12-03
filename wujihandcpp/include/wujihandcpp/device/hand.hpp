@@ -135,41 +135,48 @@ public:
                 "The firmware version (" + hand_version.to_string()
                 + ") is outdated. Please contact after-sales service for an upgrade.");
 
-        std::string firmware_msg =
-            "Using firmware version: "
-            + data::FirmwareVersionData{get<data::hand::FirmwareVersion>()}.to_string() + " & ";
-
-        uint32_t joint_version = finger(0).joint(0).get<data::joint::FirmwareVersion>();
-        bool joint_version_consistent = true;
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 4; j++)
-                joint_version_consistent =
-                    joint_version_consistent
-                    && joint_version == finger(i).joint(j).get<data::joint::FirmwareVersion>();
-
-        if (joint_version_consistent) {
-            firmware_msg += data::FirmwareVersionData{joint_version}.to_string();
+        if (hand_version >= data::FirmwareVersionData{3, 1, 0, 'D'}) {
+            auto full_system_version =
+                data::FirmwareVersionData{read<data::hand::FullSystemFirmwareVersion>()};
+            std::string firmware_msg = "Using firmware version: " + full_system_version.to_string();
             logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
         } else {
-            firmware_msg += "[Matrix]";
-            logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
+            std::string firmware_msg =
+                "Using firmware version: " + hand_version.to_string() + " & ";
 
-            std::string joint_firmware_msg;
-            for (int i = 0; i < 5; i++) {
-                joint_firmware_msg.clear();
-                for (int j = 0; j < 4; j++) {
-                    joint_firmware_msg += "  ";
-                    joint_firmware_msg +=
-                        data::FirmwareVersionData{
-                            finger(i).joint(j).get<data::joint::FirmwareVersion>()}
-                            .to_string();
+            uint32_t joint_version = finger(0).joint(0).get<data::joint::FirmwareVersion>();
+            bool joint_version_consistent = true;
+            for (int i = 0; i < 5; i++)
+                for (int j = 0; j < 4; j++)
+                    joint_version_consistent =
+                        joint_version_consistent
+                        && joint_version == finger(i).joint(j).get<data::joint::FirmwareVersion>();
+
+            if (joint_version_consistent) {
+                firmware_msg += data::FirmwareVersionData{joint_version}.to_string();
+                logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
+            } else {
+                firmware_msg += "[Matrix]";
+                logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
+
+                std::string joint_firmware_msg;
+                for (int i = 0; i < 5; i++) {
+                    joint_firmware_msg.clear();
+                    for (int j = 0; j < 4; j++) {
+                        joint_firmware_msg += "  ";
+                        joint_firmware_msg +=
+                            data::FirmwareVersionData{
+                                finger(i).joint(j).get<data::joint::FirmwareVersion>()}
+                                .to_string();
+                    }
+                    logging::log(
+                        logging::Level::INFO, joint_firmware_msg.c_str(),
+                        joint_firmware_msg.size());
                 }
-                logging::log(
-                    logging::Level::INFO, joint_firmware_msg.c_str(), joint_firmware_msg.size());
-            }
 
-            const char warning_msg[] = "Inconsistent driver board firmware version detected";
-            logging::log(logging::Level::WARN, warning_msg, sizeof(warning_msg) - 1);
+                const char warning_msg[] = "Inconsistent driver board firmware version detected";
+                logging::log(logging::Level::WARN, warning_msg, sizeof(warning_msg) - 1);
+            }
         }
     }
 
@@ -361,9 +368,9 @@ private:
 
     using Datas = DataTuple<
         data::hand::Handedness, data::hand::FirmwareVersion, data::hand::FirmwareDate,
-        data::hand::SystemTime, data::hand::Temperature, data::hand::InputVoltage,
-        data::hand::PdoEnabled, data::hand::RPdoId, data::hand::TPdoId, data::hand::PdoInterval,
-        data::hand::RPdoTriggerOffset, data::hand::TPdoTriggerOffset>;
+        data::hand::FullSystemFirmwareVersion, data::hand::SystemTime, data::hand::Temperature,
+        data::hand::InputVoltage, data::hand::PdoEnabled, data::hand::RPdoId, data::hand::TPdoId,
+        data::hand::PdoInterval, data::hand::RPdoTriggerOffset, data::hand::TPdoTriggerOffset>;
 
     protocol::Handler handler_;
 
