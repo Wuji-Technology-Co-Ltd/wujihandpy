@@ -43,13 +43,7 @@ public:
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
         , transport_(std::move(transport))
         , sdo_builder_(*transport_, 0x21)
-        , pdo_builder_(*transport_, 0x11)
-        , sdo_thread_([this](const std::stop_token& stop_token) { sdo_thread_main(stop_token); }) {
-
-        transport_->receive([this](const std::byte* buffer, size_t size) {
-            receive_transfer_completed_callback(buffer, size);
-        });
-    }
+        , pdo_builder_(*transport_, 0x11) {}
 
     ~Impl() = default;
 
@@ -57,6 +51,15 @@ public:
         storage_[storage_id].info = info;
         IndexMapKey index{.index = info.index, .sub_index = info.sub_index};
         index_storage_map_[std::bit_cast<uint32_t>(index)] = &storage_[storage_id];
+    }
+
+    void start_transmit_receive() {
+        transport_->receive([this](const std::byte* buffer, size_t size) {
+            receive_transfer_completed_callback(buffer, size);
+        });
+
+        sdo_thread_ = std::jthread{
+            [this](const std::stop_token& stop_token) { sdo_thread_main(stop_token); }};
     }
 
     void read_async_unchecked(int storage_id, std::chrono::steady_clock::duration::rep timeout) {
@@ -125,6 +128,10 @@ public:
             std::memory_order::release);
     }
 
+    void enable_host_heartbeat() {
+        host_heartbeat_enabled_.store(true, std::memory_order::relaxed);
+    }
+
     auto realtime_get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
         return pdo_read_result_;
     }
@@ -135,8 +142,7 @@ public:
         if (realtime_controller_) [[unlikely]]
             std::terminate(); // Logically impossible, only for protection
 
-        pdo_write_async_unchecked(
-            false, positions, 0); // TODO: Update According to the specific protocol
+        pdo_write_async_unchecked(true, positions, 0);
     }
 
     void attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream) {
@@ -631,11 +637,18 @@ private:
                         callback(context, true);
                 }
 
-                if (update_index % 127 == 0
-                    && storage.info.policy
-                           & Handler::StorageInfo::TPDO_PROACTIVELY_REPORT_HEARTBEAT) {
-                    // TODO: Update According to the specific protocol
-                    write_async_unchecked(Buffer8{}, static_cast<int>(i), 0);
+                // Reset the host counter every 320ms
+                if (host_heartbeat_enabled_.load(std::memory_order::relaxed)
+                    && storage.info.policy & Handler::StorageInfo::HOST_HEARTBEAT
+                    && update_index % 64 == 0
+                    && storage.operation.load(std::memory_order::relaxed).mode
+                           != Operation::Mode::NONE) {
+                    store_data(storage, Buffer8{uint32_t(0)});
+                    storage.timeout = std::chrono::milliseconds(500);
+                    storage.callback = nullptr;
+                    operation = Operation{
+                        .mode = Operation::Mode::WRITE, .state = Operation::State::WAITING};
+                    storage.operation.store(operation, std::memory_order::release);
                 }
 
                 if (operation.state == Operation::State::WAITING) {
@@ -898,6 +911,7 @@ private:
     std::unique_ptr<LatencyTester> latency_tester_;
     std::mutex latency_tester_mutex_;
 
+    std::atomic<bool> host_heartbeat_enabled_;
     std::jthread sdo_thread_;
 
     std::unique_ptr<device::IRealtimeController> realtime_controller_;
@@ -918,6 +932,8 @@ WUJIHANDCPP_API void Handler::init_storage_info(int storage_id, StorageInfo info
     impl_->init_storage_info(storage_id, info);
 }
 
+WUJIHANDCPP_API void Handler::start_transmit_receive() { impl_->start_transmit_receive(); }
+
 WUJIHANDCPP_API void Handler::read_async_unchecked(
     int storage_id, std::chrono::steady_clock::duration::rep timeout) {
     impl_->read_async_unchecked(storage_id, timeout);
@@ -933,6 +949,8 @@ WUJIHANDCPP_API void Handler::write_async_unchecked(
     Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout) {
     impl_->write_async_unchecked(data, storage_id, timeout);
 }
+
+WUJIHANDCPP_API void Handler::enable_host_heartbeat() { impl_->enable_host_heartbeat(); }
 
 WUJIHANDCPP_API void Handler::write_async(
     Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,

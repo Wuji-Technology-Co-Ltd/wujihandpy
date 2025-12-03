@@ -22,7 +22,8 @@ private:
 
     using Datas = DataTuple<
         data::joint::FirmwareVersion, data::joint::FirmwareDate, data::joint::ControlMode,
-        data::joint::SinLevel, data::joint::CurrentLimit, data::joint::BusVoltage,
+        data::joint::SinLevel, data::joint::PositionFilterCutoffFreq,
+        data::joint::TorqueSlopeLimitPerCycle, data::joint::CurrentLimit, data::joint::BusVoltage,
         data::joint::Temperature, data::joint::ResetError, data::joint::ErrorCode,
         data::joint::Enabled, data::joint::ActualPosition, data::joint::TargetPosition,
         data::joint::UpperLimit, data::joint::LowerLimit>;

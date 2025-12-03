@@ -34,6 +34,8 @@ public:
     explicit LowPass(double cutoff_freq) noexcept
         : cutoff_freq_(cutoff_freq) {};
 
+    double cutoff_freq() const { return cutoff_freq_; }
+
     static constexpr double calculate_alpha(double cutoff_freq, double sampling_freq) {
         constexpr double pi = 3.141592653589793;
         double dt = 1.0 / sampling_freq;

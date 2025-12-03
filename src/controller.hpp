@@ -20,8 +20,8 @@ public:
 
     IControllerWrapper(const IControllerWrapper&) = delete;
     IControllerWrapper& operator=(const IControllerWrapper&) = delete;
-    IControllerWrapper(IControllerWrapper&&) = delete;
-    IControllerWrapper& operator=(IControllerWrapper&&) = delete;
+    IControllerWrapper(IControllerWrapper&&) noexcept = default;
+    IControllerWrapper& operator=(IControllerWrapper&&) noexcept = default;
 
     ~IControllerWrapper() = default;
 

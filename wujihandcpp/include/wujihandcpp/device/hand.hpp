@@ -31,15 +31,30 @@ public:
         : handler_(usb_vid, usb_pid, serial_number, data_count()) {
 
         init_storage_info(mask);
+        handler_.start_transmit_receive();
 
         try {
             check_firmware_version();
 
+            if (feature_tpdo_proactively_report)
+                handler_.enable_host_heartbeat();
+
             write<data::joint::Enabled>(false);
+
             Latch latch;
             write_async<data::joint::ControlMode>(latch, feature_firmware_filter_ ? 9 : 6);
             write_async<data::joint::CurrentLimit>(latch, 1000);
+
+            if (feature_firmware_filter_) {
+                write_async<data::hand::RPdoId>(latch, 0x01);
+                write_async<data::hand::TPdoId>(latch, 0x01);
+                write_async<data::hand::PdoInterval>(latch, 2000);
+                write_async<data::hand::PdoEnabled>(latch, 1);
+            }
+            if (feature_tpdo_proactively_report)
+                write_async<data::hand::TPdoProactivelyReport>(latch, 1);
             latch.wait();
+
         } catch (const TimeoutError&) {
             throw TimeoutError("Hand initialization timed out: joint configuration incomplete");
         }
@@ -57,25 +72,34 @@ public:
                 "The firmware version (" + hand_version.to_string()
                 + ") is outdated. Please contact after-sales service for an upgrade.");
 
-        if (hand_version >= data::FirmwareVersionData{3, 1, 0, 'D'}) {
+        auto joint_version =
+            data::FirmwareVersionData{finger(0).joint(0).get<data::joint::FirmwareVersion>()};
+        bool joint_version_consistent = true;
+        for (int i = 0; i < 5; i++)
+            for (int j = 0; j < 4; j++)
+                if (joint_version
+                    != data::FirmwareVersionData{
+                        finger(i).joint(j).get<data::joint::FirmwareVersion>()})
+                    joint_version_consistent = false;
+
+        bool log_full_system_version = (hand_version >= data::FirmwareVersionData{3, 1, 0, 'D'});
+        if (log_full_system_version) {
             auto full_system_version =
                 data::FirmwareVersionData{read<data::hand::FullSystemFirmwareVersion>()};
-            std::string firmware_msg = "Using firmware version: " + full_system_version.to_string();
-            logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
-        } else {
+            if (full_system_version.major > 0) {
+                std::string firmware_msg =
+                    "Using firmware version: " + full_system_version.to_string();
+                logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
+            } else
+                log_full_system_version = false;
+        }
+
+        if (!log_full_system_version) {
             std::string firmware_msg =
                 "Using firmware version: " + hand_version.to_string() + " & ";
 
-            uint32_t joint_version = finger(0).joint(0).get<data::joint::FirmwareVersion>();
-            bool joint_version_consistent = true;
-            for (int i = 0; i < 5; i++)
-                for (int j = 0; j < 4; j++)
-                    joint_version_consistent =
-                        joint_version_consistent
-                        && joint_version == finger(i).joint(j).get<data::joint::FirmwareVersion>();
-
             if (joint_version_consistent) {
-                firmware_msg += data::FirmwareVersionData{joint_version}.to_string();
+                firmware_msg += joint_version.to_string();
                 logging::log(logging::Level::INFO, firmware_msg.c_str(), firmware_msg.size());
             } else {
                 firmware_msg += "[Matrix]";
@@ -96,13 +120,22 @@ public:
                         joint_firmware_msg.size());
                 }
 
-                const char warning_msg[] = "Inconsistent driver board firmware version detected";
+                constexpr char warning_msg[] =
+                    "Inconsistent driver board firmware version detected";
                 logging::log(logging::Level::WARN, warning_msg, sizeof(warning_msg) - 1);
             }
         }
-        
-        if (hand_version > data::FirmwareVersionData{3, 3, 0}) // TODO: Update actual version
+
+        if (joint_version_consistent && joint_version >= data::FirmwareVersionData{6, 4, 0, 'J'}) {
             feature_firmware_filter_ = true;
+            constexpr char debug_msg[] = "Firmware filter enabled";
+            logging::log(logging::Level::DEBUG, debug_msg, sizeof(debug_msg) - 1);
+        }
+        if (hand_version >= data::FirmwareVersionData{3, 2, 0}) {
+            feature_tpdo_proactively_report = true;
+            constexpr char debug_msg[] = "TPdo proactively report enabled";
+            logging::log(logging::Level::DEBUG, debug_msg, sizeof(debug_msg) - 1);
+        }
     }
 
     Finger finger_thumb() { return finger(0); }
@@ -128,8 +161,7 @@ public:
     template <bool enable_upstream>
     auto realtime_controller(const filter::LowPass& filter) -> std::unique_ptr<IController> {
         if (feature_firmware_filter_) {
-            // TODO: Warn Depreciated
-            // TODO: Config firmware filter by SDO
+            write<data::joint::PositionFilterCutoffFreq>(static_cast<float>(filter.cutoff_freq()));
 
             class CompatibleControllerOperator : public IController {
             public:
@@ -404,14 +436,16 @@ private:
     }
 
     using Datas = DataTuple<
-        data::hand::Handedness, data::hand::FirmwareVersion, data::hand::FirmwareDate,
-        data::hand::FullSystemFirmwareVersion, data::hand::SystemTime, data::hand::Temperature,
-        data::hand::InputVoltage, data::hand::PdoEnabled, data::hand::RPdoId, data::hand::TPdoId,
-        data::hand::PdoInterval, data::hand::RPdoTriggerOffset, data::hand::TPdoTriggerOffset>;
+        data::hand::Handedness, data::hand::HostTimeoutCounter, data::hand::FirmwareVersion,
+        data::hand::FirmwareDate, data::hand::FullSystemFirmwareVersion, data::hand::SystemTime,
+        data::hand::Temperature, data::hand::InputVoltage, data::hand::TPdoProactivelyReport,
+        data::hand::PdoEnabled, data::hand::RPdoId, data::hand::TPdoId, data::hand::PdoInterval,
+        data::hand::RPdoTriggerOffset, data::hand::TPdoTriggerOffset>;
 
     protocol::Handler handler_;
 
     bool feature_firmware_filter_ = false;
+    bool feature_tpdo_proactively_report = false;
 
     static constexpr uint16_t index_offset_ = 0x0000;
     static constexpr int storage_offset_ = 0;
