@@ -621,8 +621,22 @@ private:
 
             for (size_t i = 0; i < storage_unit_count_; i++) {
                 auto& storage = storage_[i];
-
                 auto operation = storage.operation.load(std::memory_order::acquire);
+
+                // Reset the host counter every 320ms
+                if (host_heartbeat_enabled_.load(std::memory_order::relaxed)
+                    && storage.info.policy & Handler::StorageInfo::HOST_HEARTBEAT
+                    && update_index % 64 == 0
+                    && storage.operation.load(std::memory_order::relaxed).mode
+                           == Operation::Mode::NONE) {
+                    store_data(storage, Buffer8{uint32_t(0)});
+                    storage.timeout = std::chrono::milliseconds(500);
+                    storage.callback = nullptr;
+                    operation = Operation{
+                        .mode = Operation::Mode::WRITE, .state = Operation::State::WAITING};
+                    storage.operation.store(operation, std::memory_order::relaxed);
+                }
+
                 if (operation.mode == Operation::Mode::NONE)
                     continue;
 
@@ -635,20 +649,6 @@ private:
                     storage.operation.store(operation, std::memory_order::release);
                     if (callback)
                         callback(context, true);
-                }
-
-                // Reset the host counter every 320ms
-                if (host_heartbeat_enabled_.load(std::memory_order::relaxed)
-                    && storage.info.policy & Handler::StorageInfo::HOST_HEARTBEAT
-                    && update_index % 64 == 0
-                    && storage.operation.load(std::memory_order::relaxed).mode
-                           != Operation::Mode::NONE) {
-                    store_data(storage, Buffer8{uint32_t(0)});
-                    storage.timeout = std::chrono::milliseconds(500);
-                    storage.callback = nullptr;
-                    operation = Operation{
-                        .mode = Operation::Mode::WRITE, .state = Operation::State::WAITING};
-                    storage.operation.store(operation, std::memory_order::release);
                 }
 
                 if (operation.state == Operation::State::WAITING) {

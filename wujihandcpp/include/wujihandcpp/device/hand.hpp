@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include <atomic>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -163,25 +164,6 @@ public:
         if (feature_firmware_filter_) {
             write<data::joint::PositionFilterCutoffFreq>(static_cast<float>(filter.cutoff_freq()));
 
-            class CompatibleControllerOperator : public IController {
-            public:
-                explicit CompatibleControllerOperator(Hand& hand)
-                    : hand_(hand) {}
-
-                ~CompatibleControllerOperator() override = default;
-
-                auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] override {
-                    return hand_.realtime_get_joint_actual_position();
-                }
-
-                void set_joint_target_position(const double (&positions)[5][4]) override {
-                    hand_.realtime_set_joint_target_position(positions);
-                }
-
-            private:
-                Hand& hand_;
-            };
-
             return std::make_unique<CompatibleControllerOperator>(*this);
         } else {
             bool last_enabled[5][4];
@@ -258,6 +240,25 @@ public:
     }
 
 private:
+    class CompatibleControllerOperator : public IController {
+    public:
+        explicit CompatibleControllerOperator(Hand& hand)
+            : hand_(hand) {}
+
+        ~CompatibleControllerOperator() override = default;
+
+        auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] override {
+            return hand_.realtime_get_joint_actual_position();
+        }
+
+        void set_joint_target_position(const double (&positions)[5][4]) override {
+            hand_.realtime_set_joint_target_position(positions);
+        }
+
+    private:
+        Hand& hand_;
+    };
+
     template <typename FilterT, bool upstream_enabled>
     class FilteredControllerOperator;
 
