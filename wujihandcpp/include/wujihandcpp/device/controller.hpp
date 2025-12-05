@@ -1,9 +1,21 @@
 #pragma once
 
 #include <atomic>
+#include <stdexcept>
 
 namespace wujihandcpp {
 namespace device {
+
+class IController {
+public:
+    virtual ~IController() = default;
+
+    virtual auto get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
+        throw std::logic_error("Upstream is disabled.");
+    };
+
+    virtual void set_joint_target_position(const double (&positions)[5][4]) = 0;
+};
 
 class IRealtimeController {
 public:

@@ -253,8 +253,7 @@ public:
         return py::array_t<ValueType>({5, 4}, buffer, free);
     }
 
-    std::unique_ptr<IController>
-        realtime_controller(bool enable_upstream, const filter::IFilter& filter) {
+    IControllerWrapper realtime_controller(bool enable_upstream, const filter::IFilter& filter) {
         return filter.create_controller(*this, enable_upstream);
     }
 
@@ -262,20 +261,21 @@ public:
     void stop_latency_test() { T::stop_latency_test(); }
 
     // Raw SDO operations - only available for Hand
-    py::bytes raw_sdo_read(int finger_id, int joint_id, uint16_t index, uint8_t sub_index, double timeout)
-        requires std::is_same_v<T, wujihandcpp::device::Hand>
-    {
+    py::bytes
+        raw_sdo_read(int finger_id, int joint_id, uint16_t index, uint8_t sub_index, double timeout)
+            requires std::is_same_v<T, wujihandcpp::device::Hand> {
         std::vector<std::byte> result;
         {
             py::gil_scoped_release release;
-            result = T::raw_sdo_read(finger_id, joint_id, index, sub_index, seconds_to_duration(timeout));
+            result = T::raw_sdo_read(
+                finger_id, joint_id, index, sub_index, seconds_to_duration(timeout));
         }
         return py::bytes(reinterpret_cast<const char*>(result.data()), result.size());
     }
 
-    void raw_sdo_write(int finger_id, int joint_id, uint16_t index, uint8_t sub_index, py::bytes data, double timeout)
-        requires std::is_same_v<T, wujihandcpp::device::Hand>
-    {
+    void raw_sdo_write(
+        int finger_id, int joint_id, uint16_t index, uint8_t sub_index, py::bytes data,
+        double timeout) requires std::is_same_v<T, wujihandcpp::device::Hand> {
         // Convert py::bytes to std::string while GIL is held
         std::string buffer = static_cast<std::string>(data);
 

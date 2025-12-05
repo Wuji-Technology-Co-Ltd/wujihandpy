@@ -36,15 +36,15 @@ PYBIND11_MODULE(_core, m) {
         }
     });
 
-    py::class_<IController>(m, "IController")
-        .def("__enter__", [](IController& self) -> IController& { return self; })
+    py::class_<IControllerWrapper>(m, "IController")
+        .def("__enter__", [](IControllerWrapper& self) -> IControllerWrapper& { return self; })
         .def(
-            "__exit__", [](IController& self, const py::object&, const py::object&,
+            "__exit__", [](IControllerWrapper& self, const py::object&, const py::object&,
                            const py::object&) { self.close(); })
-        .def("close", &IController::close)
-        .def("get_joint_actual_position", &IController::get_joint_actual_position)
+        .def("close", &IControllerWrapper::close)
+        .def("get_joint_actual_position", &IControllerWrapper::get_joint_actual_position)
         .def(
-            "set_joint_target_position", &IController::set_joint_target_position,
+            "set_joint_target_position", &IControllerWrapper::set_joint_target_position,
             py::arg("value_array"));
 
     filter::init_module(m);

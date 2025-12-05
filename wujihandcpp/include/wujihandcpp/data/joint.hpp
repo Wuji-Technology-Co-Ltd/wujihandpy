@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include "wujihandcpp/data/helper.hpp"
-#include "wujihandcpp/protocol/handler.hpp"
 
 namespace wujihandcpp {
 
@@ -22,6 +21,8 @@ struct FirmwareDate : ReadOnlyData<device::Joint, 0x01, 2, uint32_t> {};
 struct ControlMode : WriteOnlyData<device::Joint, 0x02, 1, uint16_t> {};
 
 struct SinLevel : WriteOnlyData<device::Joint, 0x05, 8, uint16_t> {};
+struct PositionFilterCutoffFreq : WriteOnlyData<device::Joint, 0x05, 19, float> {};
+struct TorqueSlopeLimitPerCycle : WriteOnlyData<device::Joint, 0x05, 20, float> {};
 
 struct CurrentLimit : WriteOnlyData<device::Joint, 0x07, 2, uint16_t> {};
 
