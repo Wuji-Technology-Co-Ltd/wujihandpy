@@ -42,9 +42,11 @@ def run(hand: wujihandpy.Hand):
                 ],
                 dtype=np.float64,
             )
+            # Realtime APIs never block
             controller.set_joint_target_position(target)
 
             # Print control error
+            # Realtime APIs never block
             error = target - controller.get_joint_actual_position()
             print(error)
 
