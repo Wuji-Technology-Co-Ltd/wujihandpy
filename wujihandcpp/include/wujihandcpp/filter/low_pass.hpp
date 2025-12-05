@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <iostream>
 
 namespace wujihandcpp {
 namespace filter {
@@ -34,6 +33,8 @@ public:
 
     explicit LowPass(double cutoff_freq) noexcept
         : cutoff_freq_(cutoff_freq) {};
+
+    double cutoff_freq() const noexcept { return cutoff_freq_; }
 
     static constexpr double calculate_alpha(double cutoff_freq, double sampling_freq) {
         constexpr double pi = 3.141592653589793;

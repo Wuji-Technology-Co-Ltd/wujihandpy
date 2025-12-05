@@ -43,13 +43,7 @@ public:
         , storage_(std::make_unique<StorageUnit[]>(storage_unit_count))
         , transport_(std::move(transport))
         , sdo_builder_(*transport_, 0x21)
-        , pdo_builder_(*transport_, 0x11)
-        , sdo_thread_([this](const std::stop_token& stop_token) { sdo_thread_main(stop_token); }) {
-
-        transport_->receive([this](const std::byte* buffer, size_t size) {
-            receive_transfer_completed_callback(buffer, size);
-        });
-    }
+        , pdo_builder_(*transport_, 0x11) {}
 
     ~Impl() = default;
 
@@ -57,6 +51,15 @@ public:
         storage_[storage_id].info = info;
         IndexMapKey index{.index = info.index, .sub_index = info.sub_index};
         index_storage_map_[std::bit_cast<uint32_t>(index)] = &storage_[storage_id];
+    }
+
+    void start_transmit_receive() {
+        transport_->receive([this](const std::byte* buffer, size_t size) {
+            receive_transfer_completed_callback(buffer, size);
+        });
+
+        sdo_thread_ = std::jthread{
+            [this](const std::stop_token& stop_token) { sdo_thread_main(stop_token); }};
     }
 
     void read_async_unchecked(int storage_id, std::chrono::steady_clock::duration::rep timeout) {
@@ -125,6 +128,23 @@ public:
             std::memory_order::release);
     }
 
+    void enable_host_heartbeat() {
+        host_heartbeat_enabled_.store(true, std::memory_order::relaxed);
+    }
+
+    auto realtime_get_joint_actual_position() -> const std::atomic<double> (&)[5][4] {
+        return pdo_read_result_;
+    }
+
+    void realtime_set_joint_target_position(const double (&positions)[5][4]) {
+        operation_thread_check();
+
+        if (realtime_controller_) [[unlikely]]
+            std::terminate(); // Logically impossible, only for protection
+
+        pdo_write_async_unchecked(true, positions, 0);
+    }
+
     void attach_realtime_controller(device::IRealtimeController* controller, bool enable_upstream) {
         operation_thread_check();
 
@@ -190,8 +210,8 @@ public:
 
     void disable_thread_safe_check() { operation_thread_id_ = std::thread::id{}; }
 
-    std::vector<std::byte>
-        raw_sdo_read(uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout) {
+    std::vector<std::byte> raw_sdo_read(
+        uint16_t index, uint8_t sub_index, std::chrono::steady_clock::duration timeout) {
         operation_thread_check();
 
         // Find an available slot
@@ -235,8 +255,9 @@ public:
             unit->in_use.store(false, std::memory_order_release);
 
             if (state == RawSdoUnit::State::FAILED)
-                throw device::TimeoutError(std::format(
-                    "Raw SDO read timed out: index=0x{:04X}, sub_index={}", index, sub_index));
+                throw device::TimeoutError(
+                    std::format(
+                        "Raw SDO read timed out: index=0x{:04X}, sub_index={}", index, sub_index));
         }
 
         return result;
@@ -249,7 +270,8 @@ public:
 
         if (data.size() != 1 && data.size() != 2 && data.size() != 4 && data.size() != 8)
             throw std::invalid_argument(
-                std::format("Raw SDO write data size must be 1, 2, 4, or 8 bytes, got {}", data.size()));
+                std::format(
+                    "Raw SDO write data size must be 1, 2, 4, or 8 bytes, got {}", data.size()));
 
         // Find an available slot
         RawSdoUnit* unit = nullptr;
@@ -290,8 +312,9 @@ public:
             unit->in_use.store(false, std::memory_order_release);
 
             if (state == RawSdoUnit::State::FAILED)
-                throw device::TimeoutError(std::format(
-                    "Raw SDO write timed out: index=0x{:04X}, sub_index={}", index, sub_index));
+                throw device::TimeoutError(
+                    std::format(
+                        "Raw SDO write timed out: index=0x{:04X}, sub_index={}", index, sub_index));
         }
     }
 
@@ -351,7 +374,14 @@ private:
         uint8_t sub_index = 0;
 
         enum class Mode : uint8_t { NONE, READ, WRITE } mode = Mode::NONE;
-        enum class State : uint8_t { IDLE, PENDING, READING, WRITING, SUCCESS, FAILED } state = State::IDLE;
+        enum class State : uint8_t {
+            IDLE,
+            PENDING,
+            READING,
+            WRITING,
+            SUCCESS,
+            FAILED
+        } state = State::IDLE;
 
         std::vector<std::byte> read_result;
         std::chrono::steady_clock::time_point timeout_point;
@@ -585,13 +615,28 @@ private:
             std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(1.0 / update_rate));
 
+        unsigned int update_index = 0;
         while (!stop_token.stop_requested()) {
             auto now = std::chrono::steady_clock::now();
 
             for (size_t i = 0; i < storage_unit_count_; i++) {
                 auto& storage = storage_[i];
-
                 auto operation = storage.operation.load(std::memory_order::acquire);
+
+                // Reset the host counter every 320ms
+                if (host_heartbeat_enabled_.load(std::memory_order::relaxed)
+                    && storage.info.policy & Handler::StorageInfo::HOST_HEARTBEAT
+                    && update_index % 64 == 0
+                    && storage.operation.load(std::memory_order::relaxed).mode
+                           == Operation::Mode::NONE) {
+                    store_data(storage, Buffer8{uint32_t(0)});
+                    storage.timeout = std::chrono::milliseconds(500);
+                    storage.callback = nullptr;
+                    operation = Operation{
+                        .mode = Operation::Mode::WRITE, .state = Operation::State::WAITING};
+                    storage.operation.store(operation, std::memory_order::relaxed);
+                }
+
                 if (operation.mode == Operation::Mode::NONE)
                     continue;
 
@@ -704,6 +749,7 @@ private:
             sdo_builder_.finalize();
 
             std::this_thread::sleep_for(update_period);
+            update_index++;
         }
     }
 
@@ -714,8 +760,12 @@ private:
             const auto& data = read_frame_struct<protocol::pdo::CommandResult>(pointer, sentinel);
 
             for (int i = 0; i < 5; i++)
-                for (int j = 0; j < 4; j++)
-                    pdo_read_result_[i][j].store(data.positions[i][j], std::memory_order::relaxed);
+                for (int j = 0; j < 4; j++) {
+                    double value = extract_raw_position(data.positions[i][j]);
+                    if (j == 0 && i != 0)
+                        value = -value;
+                    pdo_read_result_[i][j].store(value, std::memory_order::relaxed);
+                }
 
             pdo_read_result_version_.store(
                 pdo_read_result_version_.load(std::memory_order::relaxed) + 1,
@@ -747,13 +797,9 @@ private:
             utility::TickExecutor{[&](const utility::TickContext& context) {
                 device::IRealtimeController::JointPositions positions;
                 for (int i = 0; i < 5; i++)
-                    for (int j = 0; j < 4; j++) {
-                        auto& value = positions.value[i][j];
-                        value = extract_raw_position(
-                            pdo_read_result_[i][j].load(std::memory_order::relaxed));
-                        if (j == 0 && i != 0)
-                            value = -value;
-                    }
+                    for (int j = 0; j < 4; j++)
+                        positions.value[i][j] =
+                            pdo_read_result_[i][j].load(std::memory_order::relaxed);
 
                 auto target_positions = realtime_controller_->step(&positions);
 
@@ -855,8 +901,10 @@ private:
     };
     std::map<uint32_t, StorageUnit*> index_storage_map_;
 
-    std::atomic<int32_t> pdo_read_result_[5][4];
+    std::atomic<double> pdo_read_result_[5][4];
     std::atomic<uint64_t> pdo_read_result_version_ = 0;
+    static_assert(std::atomic<double>::is_always_lock_free);
+    static_assert(std::atomic<uint64_t>::is_always_lock_free);
 
     std::unique_ptr<transport::ITransport> transport_;
     FrameBuilder sdo_builder_;
@@ -865,6 +913,7 @@ private:
     std::unique_ptr<LatencyTester> latency_tester_;
     std::mutex latency_tester_mutex_;
 
+    std::atomic<bool> host_heartbeat_enabled_ = false;
     std::jthread sdo_thread_;
 
     std::unique_ptr<device::IRealtimeController> realtime_controller_;
@@ -885,6 +934,8 @@ WUJIHANDCPP_API void Handler::init_storage_info(int storage_id, StorageInfo info
     impl_->init_storage_info(storage_id, info);
 }
 
+WUJIHANDCPP_API void Handler::start_transmit_receive() { impl_->start_transmit_receive(); }
+
 WUJIHANDCPP_API void Handler::read_async_unchecked(
     int storage_id, std::chrono::steady_clock::duration::rep timeout) {
     impl_->read_async_unchecked(storage_id, timeout);
@@ -901,10 +952,21 @@ WUJIHANDCPP_API void Handler::write_async_unchecked(
     impl_->write_async_unchecked(data, storage_id, timeout);
 }
 
+WUJIHANDCPP_API void Handler::enable_host_heartbeat() { impl_->enable_host_heartbeat(); }
+
 WUJIHANDCPP_API void Handler::write_async(
     Buffer8 data, int storage_id, std::chrono::steady_clock::duration::rep timeout,
     void (*callback)(Buffer8 context, bool success), Buffer8 callback_context) {
     impl_->write_async(data, storage_id, timeout, callback, callback_context);
+}
+
+WUJIHANDCPP_API auto Handler::realtime_get_joint_actual_position()
+    -> const std::atomic<double> (&)[5][4] {
+    return impl_->realtime_get_joint_actual_position();
+}
+
+WUJIHANDCPP_API void Handler::realtime_set_joint_target_position(const double (&positions)[5][4]) {
+    impl_->realtime_set_joint_target_position(positions);
 }
 
 WUJIHANDCPP_API void Handler::attach_realtime_controller(

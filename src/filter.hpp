@@ -14,7 +14,7 @@ class IFilter {
 public:
     virtual ~IFilter() = default;
 
-    virtual std::unique_ptr<IController>
+    virtual IControllerWrapper
         create_controller(wujihandcpp::device::Hand& hand, bool enable_upstream) const = 0;
 };
 
@@ -23,10 +23,14 @@ public:
     explicit LowPass(double cutoff_freq) noexcept
         : cutoff_freq_(cutoff_freq) {}
 
-    std::unique_ptr<IController>
+    IControllerWrapper
         create_controller(wujihandcpp::device::Hand& hand, bool enable_upstream) const override {
-        return create_controller_helper(
-            hand, enable_upstream, wujihandcpp::filter::LowPass{cutoff_freq_});
+        if (enable_upstream)
+            return IControllerWrapper(
+                hand.realtime_controller<true>(wujihandcpp::filter::LowPass{cutoff_freq_}));
+        else
+            return IControllerWrapper(
+                hand.realtime_controller<false>(wujihandcpp::filter::LowPass{cutoff_freq_}));
     }
 
     const double cutoff_freq_;
