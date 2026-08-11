@@ -62,8 +62,8 @@ SDK 会自动枚举所有匹配设备、读取每只手的手性标识，再连�
 两者只能选一个传入。同时指定会抛 `ValueError`。`side` 仅接受字符串 `"left"` 或 `"right"`，其他取值会抛 `ValueError`。
 
 匹配失败的常见情形：
-- 没插对应侧的手 → 抛 `ConnectionError`，提示 `No <side> hand found`
-- 同侧插了两只 → 抛 `ConnectionError`，提示改用 `serial_number`
+- 未接入对应侧的手 → 抛 `ConnectionError`，提示 `No <side> hand found`
+- 同侧接入了两只 → 抛 `ConnectionError`，提示改用 `serial_number`
 </Callout>
 
 ### 1.4 查询序列号
