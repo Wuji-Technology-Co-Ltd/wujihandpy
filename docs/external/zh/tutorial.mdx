@@ -3,10 +3,10 @@ title: 教程
 description: Wuji Hand SDK (wujihandpy) 教程，涵盖设备连接、同步/异步读写和实时控制的使用方法。
 ---
 
-## 1. 设备连接与筛选
+## 设备连接与筛选
 本节介绍如何在 wujihandpy 中连接灵巧手设备，以及在存在多台设备时进行筛选的方法。
 
-### 1.1 接口概述
+### 连接与筛选接口概述
 ```python
 class Hand:
     def __init__(
@@ -19,14 +19,14 @@ class Hand:
         ...
 ```
 
-### 1.2 连接设备
+### 连接设备
 调用 `wujihandpy.Hand()` 可创建一个 `Hand` 对象并连接灵巧手：
 ```python
 hand = wujihandpy.Hand()
 ```
 若系统中仅连接一台灵巧手，则会自动连接该设备。
 
-### 1.3 筛选设备
+### 筛选设备
 当系统中连接了多台灵巧手时，使用无参构造函数将导致错误。例如：
 ```
 [ERROR] 2 devices found with specified vendor id (0x0483)
@@ -66,7 +66,7 @@ SDK 会自动枚举所有匹配设备、读取每只手的手性标识，再连�
 - 同侧接入了两只 → 抛 `ConnectionError`，提示改用 `serial_number`
 </Callout>
 
-### 1.4 查询序列号
+### 查询序列号
 
 灵巧手有两种序列号：
 
@@ -96,9 +96,9 @@ print(product_sn)  # e.g. "WJ-DH5-R-2501001"
 ```
 
 
-## 2. 读取数据
+## 读取数据
 本节介绍如何以同步模式读取数据。
-### 2.1 接口概述
+### 读取接口概述
 调用 `read_*` 系列函数会向灵巧手发送同步读请求，并阻塞当前线程直到设备返回结果。函数返回则表示读取已成功完成。
 
 <Callout type="warning">
@@ -108,11 +108,11 @@ print(product_sn)  # e.g. "WJ-DH5-R-2501001"
 
   对实时控制场景，请考虑：
 
-  - 使用 [单向/双向实时控制器](#4-实时控制)
-  - 在旁路低速循环中使用 [异步 API](#5-异步读写)
+  - 使用 [单向/双向实时控制器](#实时控制)
+  - 在旁路低速循环中使用 [异步 API](#异步读写)
 </Callout>
 
-### 2.2 单值读取
+### 单值读取
 当读取层级与对象层级一致时，函数返回单个标量值。
 ```python
 class Hand:
@@ -135,7 +135,7 @@ time = hand.read_system_time()
 position = hand.finger(1).joint(0).read_joint_actual_position()
 ```
 
-### 2.3 批量读取
+### 批量读取
 当读取层级低于对象层级时，函数返回包含多个数据的矩阵。
 ```python
 class Hand:
@@ -168,13 +168,13 @@ positions = hand.read_joint_actual_position()
 [ 0.382  0.241 -0.003 -0.275]
 ```
 
-### 2.4 更多示例
+### 更多读取示例
 - [example/joint/1.read.py](https://github.com/wuji-technology/wujihandpy/blob/main/example/joint/1.read.py)
 
 
-## 3. 写入数据
+## 写入数据
 本节介绍如何以同步模式写入数据。
-### 3.1 接口概述
+### 写入接口概述
 调用 `write_*` 系列函数会向灵巧手发送同步写请求，并阻塞当前线程直到设备返回结果。函数返回则表示写入已成功完成。
 
 <Callout type="warning">
@@ -184,11 +184,11 @@ positions = hand.read_joint_actual_position()
 
   对实时控制场景，请考虑：
 
-  - 使用 [单向/双向实时控制器](#4-实时控制)
-  - 在旁路低速循环中使用 [异步 API](#5-异步读写)
+  - 使用 [单向/双向实时控制器](#实时控制)
+  - 在旁路低速循环中使用 [异步 API](#异步读写)
 </Callout>
 
-### 3.2 单值写入
+### 单值写入
 当写入层级与对象层级一致时，函数使用单个标量值。
 ```python
 class Hand:
@@ -207,7 +207,7 @@ class Joint:
 hand.finger(1).joint(0).write_joint_enabled(True)
 ```
 
-### 3.3 批量写入
+### 批量写入
 当写入层级低于对象层级时，函数既可使用单个标量值，也可使用包含多个数据的矩阵。
 ```python
 class Hand:
@@ -269,7 +269,7 @@ hand.write_joint_target_position(
 )
 ```
 
-### 3.4 非法数值写入
+### 非法数值写入
 
 通常，非法数值写入会被自动处理，例如：
 - 超出合法范围的角度会被自动限幅至上下界。
@@ -279,14 +279,14 @@ hand.write_joint_target_position(
 
 会导致操作失败，抛出 TimeoutError。
 
-### 3.5 更多示例
+### 更多写入示例
 - [example/joint/2.write.py](https://github.com/wuji-technology/wujihandpy/blob/main/example/joint/2.write.py)
 
 
-## 4. 实时控制
+## 实时控制
 本节介绍在 wujihandpy 中以实时模式控制灵巧手的方法。
 
-### 4.1 接口概述
+### 实时控制接口概述
 ```python
 class Hand:
     def realtime_controller(self, enable_upstream: bool, filter: filter.IFilter) -> IController:
@@ -306,7 +306,7 @@ class IController:
 调用 `Hand.realtime_controller()` 可使灵巧手进入实时控制模式，并返回一个实时控制器对象 `IController`。
 进入实时控制模式后，电机侧会启动一个 16 kHz 实时滤波器，将控制量滤波为平滑的 16 kHz 信号。
 
-### 4.2 滤波器
+### 滤波器
 实时控制器需要一个滤波器对象 (`filter.IFilter`) 来平滑地调整目标值。  
 <Callout type="info">
   滤波器的初值会自动设置为灵巧手的实际位置，避免初始过渡问题。
@@ -319,7 +319,7 @@ wujihandpy 提供以下常用滤波器：
   由于滤波器逻辑运行于电机驱动板上，不可使用自定义滤波器。
 </Callout>
 
-### 4.3 上下文管理器
+### 上下文管理器
 `IController` 可作为上下文管理器使用：
 
 ```python
@@ -334,13 +334,13 @@ with hand.realtime_controller(
 #### 自动析构
 若未使用上下文管理器，`IController` 在析构时也会自动调用 `close()`，由于 Python 的垃圾回收存在延迟，灵巧手可能不会立即退出实时模式。若不需精确控制退出时机，可直接依赖析构行为。
 
-### 4.4 实时写入
+### 实时写入
 ```python
 def set_joint_target_position(self, value_array: np.NDArray[np.float64]) -> None: ...
 ```
 `set_joint_target_position()` 函数会非阻塞地将目标控制量尽可能快地发送至电机驱动板。
 
-### 4.5 实时读取
+### 实时读取
 电机以 1 kHz 的频率自动上报当前位置和 effort。以下函数均为非阻塞调用，会立即返回缓存中最新的读取结果。
 
 ```python
@@ -381,14 +381,14 @@ finally:
     hand.write_joint_enabled(False)
 ```
 
-### 4.6 进阶示例
+### 实时控制进阶示例
 - [example/joint/3.realtime.py](https://github.com/wuji-technology/wujihandpy/blob/main/example/joint/3.realtime.py)
 
 
-## 5. 异步读/写
+## 异步读/写
 本节介绍在 wujihandpy 中以异步模式读/写数据的方法。
 
-### 5.1 接口概述
+### 异步接口概述
 读/写接口均提供异步版本，函数名以 `_async` 为后缀，用于在协程环境中执行非阻塞的 I/O 操作。
 ```python
 async def read_<dataname>_async(self) -> datatype: ...
@@ -409,8 +409,8 @@ async def write_<dataname>_async(self, values: np.NDArray[datatype]): ...  # 批
 
   对实时控制场景，请考虑：
 
-  - 使用 [单向/双向实时控制器](#4-实时控制)
-  - 在旁路低速循环中使用 [异步 API](#5-异步读写)
+  - 使用 [单向/双向实时控制器](#实时控制)
+  - 在旁路低速循环中使用 [异步 API](#异步读写)
 </Callout>
 
 **示例**
@@ -438,14 +438,14 @@ async def main():
 asyncio.run(main())
 ```
 
-### 5.2 进阶示例
+### 异步进阶示例
 - [example/joint/4.async.py](https://github.com/wuji-technology/wujihandpy/blob/main/example/joint/4.async.py)
 
 
-## 6. 多线程操作
+## 多线程操作
 本节介绍在 wujihandpy 中进行多线程操作的方法。
 
-### 6.1 接口概述
+### 多线程接口概述
 默认情况下，wujihandpy 会对 `Hand` 对象进行线程安全检查，以防止多线程并发访问导致的数据竞争问题。若需在多线程环境中使用同一个 `Hand` 对象，需先调用 `Hand.disable_thread_safe_check()` 禁用该检查。
 
 ```python
@@ -454,7 +454,7 @@ class Hand:
         ...
 ```
 
-### 6.2 多线程安全注意事项
+### 多线程安全注意事项
 
 <Callout type="warning">
 **重要**：禁用线程安全检查后，用户需要自行保证线程安全。
@@ -526,7 +526,7 @@ with hand.realtime_controller(
         t.join()
 ```
 
-### 6.3 预期效果
+### 预期效果
 
 运行示例后，终端将输出类似以下内容：
 
@@ -562,14 +562,14 @@ Thread safety check disabled, multi-threaded access enabled
 - 两个线程交替输出，顺序可能交错，这是多线程的正常现象
 - F1（拇指）保持不动，F2（食指）、F3（中指）、F4（无名指）、F5（小指）会做周期性弯曲-伸展动作
 
-### 6.4 进阶示例
+### 多线程进阶示例
 - [example/joint/5.multithread.py](https://github.com/wuji-technology/wujihandpy/blob/main/example/joint/5.multithread.py)
 
 
-## 7. USB 断连处理
+## USB 断连处理
 设备运行期间，灵巧手与电脑之间的 USB 连接可能中断，例如数据线被拔出。本节介绍 wujihandpy 在断连时的行为，以及捕获断连异常的方法。
 
-### 7.1 断连时的行为
+### 断连时的行为
 USB 连接中断时，wujihandpy 会抛出异常。捕获该异常即可在断连后恢复，进程不会崩溃。
 
 断连后再次发起的操作会立即抛出 Python 内置的 `ConnectionError`，不再等待 500 ms 超时，涉及接口包括：
@@ -581,7 +581,7 @@ USB 连接中断时，wujihandpy 会抛出异常。捕获该异常即可在断�
   断连瞬间已在等待中的异步请求是个例外：它会以 `TimeoutError` 结束，而非 `ConnectionError`。若代码中存在并发的异步操作，建议捕获两者的共同基类 `OSError`，即可同时覆盖断连与超时。
 </Callout>
 
-### 7.2 捕获断连异常
+### 捕获断连异常
 将设备操作放入 `try` 块，捕获 `ConnectionError` 即可处理断连：
 
 ```python
@@ -608,7 +608,7 @@ if __name__ == "__main__":
 
 运行脚本后，在读取过程中拔出 USB 线缆，循环会立即被 `ConnectionError` 中断，程序正常退出而不会崩溃。
 
-### 7.3 实时控制模式下的断连检测
+### 实时控制模式下的断连检测
 <Callout type="warning">
   实时控制器的非阻塞接口（`set_joint_target_position()`、`get_joint_actual_position()`、`get_joint_actual_effort()`）在断连时**不会**抛出 `ConnectionError`。
 </Callout>
@@ -617,5 +617,5 @@ if __name__ == "__main__":
 
 实时控制器以上下文管理器使用时，`with` 块结束会自动调用 `close()` 完成清理。断连状态下 `close()` 也会安全返回，无需额外处理。
 
-### 7.4 更多示例
+### 更多断连处理示例
 - [example/joint/6.disconnect.py](https://github.com/wuji-technology/wujihandpy/blob/main/example/joint/6.disconnect.py)

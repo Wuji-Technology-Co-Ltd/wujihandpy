@@ -3,10 +3,10 @@ title: API 参考
 description: Wuji Hand SDK (wujihandpy) 完整 API 参考，包括 Hand、Finger、Joint 类的字段列表和方法说明。
 ---
 
-## 1. 字段列表
+## 字段列表
 本节介绍 wujihandpy 中所有可用的数据字段。
 
-### 1.1 Hand 层
+### Hand 层
 该层包含整手设备唯一的通用字段，例如手性、固件版本等。  
 #### handedness
 该字段表示灵巧手的手性（左/右手，0 表示右手，1 表示左手）。  
@@ -33,7 +33,7 @@ description: Wuji Hand SDK (wujihandpy) 完整 API 参考，包括 Hand、Finger
 - **类型**：`float32`
 - **读写属性**：只读
 
-### 1.2 Joint 层
+### Joint 层
 该层包含每关节持有一个独立副本的字段，例如使能、目标位置等。  
 #### joint_firmware_version
 该字段记录关节驱动板固件的版本号。  
@@ -184,21 +184,21 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - **类型**：`float64`
 - **读写属性**：只读
 
-## 2. API 列表
-### 2.1 Hand 类
+## API 列表
+### Hand 类
 
-#### 2.1.1 构造函数
+#### 构造函数
 - `__init__(serial_number=None, *, side=None, usb_pid=0x2000, usb_vid=0x0483, mask=None) -> None`
   *初始化灵巧手连接，支持通过序列号、左右手、USB ID 或设备掩码指定设备*
 
   - `serial_number`：USB 序列号字符串，精确指定一台设备
-  - `side`：`"left"` 或 `"right"`，按手性选择设备，与 `serial_number` 互斥（详见 [教程 §1.3](../tutorial#13-筛选设备)）
+  - `side`：`"left"` 或 `"right"`，按手性选择设备，与 `serial_number` 互斥（详见 [教程 - 筛选设备](../tutorial#筛选设备)）
 
-#### 2.1.2 手指访问
+#### 手指访问
 - `finger(index) -> Finger`
   *获取指定索引的手指对象，索引范围 0-4*
 
-#### 2.1.3 线程安全控制
+#### 线程安全控制
 - `disable_thread_safe_check() -> None`
   *禁用线程安全检查，允许在多线程环境中并发访问 Hand 对象*
 
@@ -206,7 +206,7 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 **注意**：禁用线程安全检查后，用户需要自行使用互斥锁（`threading.Lock`）确保多线程操作的正确性。
 </Callout>
 
-#### 2.1.4 系统信息
+#### 系统信息
 
 ##### 固件信息
 - `read_firmware_version(timeout=0.5) -> uint32`
@@ -264,7 +264,7 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `get_input_voltage() -> float32`
   *获取缓存的输入电压*
 
-#### 2.1.5 关节数据（批量读取，返回 {5,4} 数组）
+#### 关节数据（批量读取，返回 {5,4} 数组）
 
 ##### 位置数据
 - `read_joint_actual_position(timeout=0.5) -> NDArray[float64]`
@@ -351,7 +351,7 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `get_joint_firmware_date() -> NDArray[uint32]`
   *获取缓存的所有关节固件编译日期*
 
-#### 2.1.6 关节控制（支持单个值或 {5,4} 数组）
+#### 关节控制（支持单个值或 {5,4} 数组）
 
 ##### 使能控制
 - `write_joint_enabled(value, timeout=0.5) -> None`
@@ -442,17 +442,17 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `write_joint_reset_error_unchecked(value_array, timeout=0.5) -> None`
   *非阻塞批量重置各关节错误*
 
-#### 2.1.7 实时控制器
+#### 实时控制器
 - `realtime_controller(enable_upstream, filter) -> IController`
   *创建实时控制器，用于高频控制场景*
 
-### 2.2 Finger 类
+### Finger 类
 
-#### 2.2.1 关节访问
+#### 关节访问
 - `joint(index) -> Joint`
   *获取指定索引的关节对象，索引范围 0-3*
 
-#### 2.2.2 关节数据（返回 4 元素数组）
+#### 关节数据（返回 4 元素数组）
 
 ##### 位置数据
 - `read_joint_actual_position(timeout=0.5) -> NDArray[float64]`
@@ -539,7 +539,7 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `get_joint_firmware_date() -> NDArray[uint32]`
   *获取缓存的手指所有关节固件编译日期*
 
-#### 2.2.3 关节控制（支持单个值或 4 元素数组）
+#### 关节控制（支持单个值或 4 元素数组）
 
 ##### 使能控制
 - `write_joint_enabled(value, timeout=0.5) -> None`
@@ -630,9 +630,9 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `write_joint_reset_error_unchecked(value_array, timeout=0.5) -> None`
   *非阻塞批量重置手指各关节错误*
 
-### 2.3 Joint 类
+### Joint 类
 
-#### 2.3.1 关节数据（返回单个值）
+#### 关节数据（返回单个值）
 
 ##### 位置数据
 - `read_joint_actual_position(timeout=0.5) -> float64`
@@ -719,7 +719,7 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `get_joint_firmware_date() -> uint32`
   *获取缓存的关节固件编译日期*
 
-#### 2.3.2 关节控制（单个值）
+#### 关节控制（单个值）
 
 ##### 使能控制
 - `write_joint_enabled(value, timeout=0.5) -> None`
@@ -774,9 +774,9 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `write_joint_reset_error_unchecked(value, timeout=0.5) -> None`
   *非阻塞重置关节错误*
 
-### 2.4 IController 接口
+### IController 接口
 
-#### 2.4.1 上下文管理
+#### 上下文管理
 - `__enter__() -> IController`
   *支持 with 语句的上下文管理器入口*
 - `__exit__(arg0, arg1, arg2) -> None`
@@ -784,7 +784,7 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - `close() -> None`
   *手动关闭实时控制器*
 
-#### 2.4.2 实时数据获取
+#### 实时数据获取
 - `get_joint_actual_position() -> NDArray[float64]`
   *实时获取所有关节实际位置（高频读取，返回 {5,4} 数组）*
 - `get_joint_actual_effort() -> NDArray[float64]`
@@ -799,20 +799,20 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 - 可通过 `effort / effort_limit` 计算输出百分比
 </Callout>
 
-#### 2.4.3 实时数据设置
+#### 实时数据设置
 - `set_joint_target_position(value_array) -> None`
   *实时设置所有关节目标位置（高频写入，参数为 {5,4} 数组）*
 
 ---
 
-### 2.5 数组形状说明
+### 数组形状说明
 
 - **Hand 类批量操作**：返回/接收形状为 `{5, 4}` 的数组（5个手指 × 4个关节）
 - **Finger 类批量操作**：返回/接收形状为 `{4}` 的数组（4个关节）
 - **Joint 类操作**：返回/接收标量值（单个关节）
 - **IController 操作**：处理形状为 `{5, 4}` 的数组，用于高频实时控制
 
-### 2.6 操作模式说明
+### 操作模式说明
 
 - **同步操作** (`read_*`, `write_*`)：阻塞操作，确保读/写成功
 - **异步操作** (`*_async`)：返回 Awaitable 对象，支持 await 语法
@@ -822,11 +822,11 @@ URDF 文件中的关节范围是理论设计值，经过保守缩放以考虑加
 
 ---
 
-## 3. 触觉感知手套
+## 触觉感知手套
 
 触觉感知手套（Tactile Sensing Glove）是 Wuji Hand 的选配触觉感知配件。SDK 通过 `TactileGlove` 类提供设备连接和数据读取接口。
 
-### 3.1 核心类
+### 核心类
 
 #### TactileHandedness
 
@@ -863,7 +863,7 @@ TactileGlove(serial_number: str | None = None)
 `serial_number` 为 USB 设备序列号。传 `None` 时自动发现总线上唯一的设备，若存在多台会抛出异常。
 </Callout>
 
-### 3.2 设备连接
+### 设备连接
 
 #### 自动发现
 ```python
@@ -891,7 +891,7 @@ with TactileGlove() as glove:
 - `is_connected() -> bool`：查询连接状态
 - `get_handedness() -> TactileHandedness`：返回设备手型
 
-### 3.3 数据读取
+### 数据读取
 
 #### 阻塞读取
 
@@ -926,7 +926,7 @@ glove.stop_streaming()
 - `start_streaming` 与 `read_frame` 互斥，不可同时使用
 - 所有阻塞操作释放 Python GIL
 
-### 3.4 配置与诊断
+### 配置与诊断
 
 | 方法 | 说明 |
 |------|------|
@@ -944,14 +944,14 @@ glove.stop_streaming()
 | `reset_device()` | 软复位。设备会从总线断开并重新枚举，调用后需重新 `connect()` |
 | `enter_bootloader(magic)` | 跳转至 bootloader 以执行 OTA，传入 `TACTILE_BOOTLOADER_MAGIC` |
 
-### 3.5 异常处理
+### 异常处理
 
 | 异常 | 触发场景 |
 |------|----------|
 | `RuntimeError` | `read_frame` 超时、读取期间 USB 断开、未连接时调用 `read_frame`，或在已流式时重复调用 `start_streaming` |
 | `TactileError` | 命令返回设备协议错误（长度错误、CRC 错误、未知命令、负载错误） |
 
-### 3.6 完整示例
+### 完整示例
 
 覆盖 `TactileGlove` 的完整工作流：自动发现与设备信息查询、主机/设备时钟同步、采样率配置、阻塞读取与流式回调、数据保存以及诊断计数器读取。`reset_device` / `enter_bootloader` 会断开当前连接（设备复位或进入 bootloader），仅在末尾以注释形式给出。
 
@@ -1069,7 +1069,7 @@ Collected 326 frames, CRC errors 0, dropouts 0, USB resets 0, uptime 142628802 m
 Saved 326 frames to tactile_data.npy
 ```
 
-### 3.7 与 Wuji Hand 联合使用
+### 与 Wuji Hand 联合使用
 
 `Hand` 与 `TactileGlove` 使用独立的 USB 传输和线程，可在同一进程内并行使用，无需额外协调。帧回调在触觉手套的流式消费线程中触发，关节命令运行在调用它们的线程上。该模式适合用触觉反馈驱动运动控制的闭环场景，例如根据当前压力峰值动态缩放关节运动幅度。
 
@@ -1083,7 +1083,7 @@ Saved 326 frames to tactile_data.npy
 - 松手后幅度自动恢复
 - Ctrl-C 退出时自动停止流式、关闭关节使能并断开手套
 
-### 3.8 协议参考
+### 协议参考
 
 本节面向需要自行解析触觉数据帧的高级开发者。使用 SDK 的 `TactileGlove` 类时无需关注协议细节。
 
@@ -1195,11 +1195,11 @@ with serial.Serial("/dev/ttyACM0", timeout=1.0) as port:
 
 ---
 
-## 4. logging 模块
+## logging 模块
 
-`wujihandpy.logging` 子模块用于在运行时配置 SDK 日志行为。默认行为、环境变量与排查建议见 [入门 - 获取日志](../introduction#53-获取日志)。
+`wujihandpy.logging` 子模块用于在运行时配置 SDK 日志行为。默认行为、环境变量与排查建议见 [入门 - 获取日志](../introduction#获取日志)。
 
-### 4.1 Level 枚举
+### Level 枚举
 
 | 成员 | 数值 | 含义 |
 | :--- | :--- | :--- |
@@ -1211,7 +1211,7 @@ with serial.Serial("/dev/ttyACM0", timeout=1.0) as port:
 | `Level.Critical` | 5 | 严重错误 |
 | `Level.Off` | 6 | 关闭日志 |
 
-### 4.2 函数
+### 函数
 
 #### set_log_path
 

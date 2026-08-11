@@ -3,10 +3,10 @@ title: API Reference
 description: Complete Wuji Hand SDK (wujihandpy) API reference, including field lists and method descriptions for Hand, Finger, and Joint classes.
 ---
 
-## 1. Field List
+## Field List
 This section introduces all available data fields in wujihandpy.
 
-### 1.1 Hand Layer
+### Hand Layer
 This layer contains device-unique general fields, such as handedness, firmware version, etc.
 #### handedness
 This field indicates the handedness of the dexterous hand (left/right hand, 0 for right, 1 for left).
@@ -33,7 +33,7 @@ This field indicates the measured input voltage of the dexterous hand, in volts.
 - **Type**: `float32`
 - **Read/Write**: Read-only
 
-### 1.2 Joint Layer
+### Joint Layer
 This layer contains fields where each joint holds an independent copy, such as enabled status, target position, etc.
 #### joint_firmware_version
 This field records the version number of the joint driver board firmware.
@@ -184,21 +184,21 @@ This field records the lower position limit of the joint.
 - **Type**: `float64`
 - **Read/Write**: Read-only
 
-## 2. API List
-### 2.1 Hand Class
+## API List
+### Hand Class
 
-#### 2.1.1 Constructor
+#### Constructor
 - `__init__(serial_number=None, *, side=None, usb_pid=0x2000, usb_vid=0x0483, mask=None) -> None`
   *Initialize connection to the dexterous hand. Supports specifying the device by serial number, handedness, USB ID, or device mask.*
 
   - `serial_number`: USB serial number string to select one device exactly
-  - `side`: `"left"` or `"right"`. Selects the device by handedness. Mutually exclusive with `serial_number` (see [Tutorial §1.3](../tutorial#13-filtering-devices))
+  - `side`: `"left"` or `"right"`. Selects the device by handedness. Mutually exclusive with `serial_number` (see [Tutorial - Filtering Devices](../tutorial#filtering-devices))
 
-#### 2.1.2 Finger Access
+#### Finger Access
 - `finger(index) -> Finger`
   *Get the finger object at the specified index, index range 0-4*
 
-#### 2.1.3 Thread Safety Control
+#### Thread Safety Control
 - `disable_thread_safe_check() -> None`
   *Disable thread safety check to allow concurrent multi-threaded access to the Hand object*
 
@@ -206,7 +206,7 @@ This field records the lower position limit of the joint.
 **Note**: After disabling the thread safety check, you must use synchronization mechanisms such as `threading.Lock` to ensure thread-safe operations.
 </Callout>
 
-#### 2.1.4 System Information
+#### System Information
 
 ##### Firmware Information
 - `read_firmware_version(timeout=0.5) -> uint32`
@@ -264,7 +264,7 @@ This field records the lower position limit of the joint.
 - `get_input_voltage() -> float32`
   *Get cached input voltage*
 
-#### 2.1.5 Joint Data (Batch Read, Returns {5,4} Array)
+#### Joint Data (Batch Read, Returns {5,4} Array)
 
 ##### Position Data
 - `read_joint_actual_position(timeout=0.5) -> NDArray[float64]`
@@ -351,7 +351,7 @@ This field records the lower position limit of the joint.
 - `get_joint_firmware_date() -> NDArray[uint32]`
   *Get cached all joint firmware build dates*
 
-#### 2.1.6 Joint Control (Supports Single Value or {5,4} Array)
+#### Joint Control (Supports Single Value or {5,4} Array)
 
 ##### Enable Control
 - `write_joint_enabled(value, timeout=0.5) -> None`
@@ -442,17 +442,17 @@ This field records the lower position limit of the joint.
 - `write_joint_reset_error_unchecked(value_array, timeout=0.5) -> None`
   *Non-blocking batch reset each joint error*
 
-#### 2.1.7 Real-time Controller
+#### Real-time Controller
 - `realtime_controller(enable_upstream, filter) -> IController`
   *Create a real-time controller for high-frequency control scenarios*
 
-### 2.2 Finger Class
+### Finger Class
 
-#### 2.2.1 Joint Access
+#### Joint Access
 - `joint(index) -> Joint`
   *Get the joint object at the specified index, index range 0-3*
 
-#### 2.2.2 Joint Data (Returns 4-Element Array)
+#### Joint Data (Returns 4-Element Array)
 
 ##### Position Data
 - `read_joint_actual_position(timeout=0.5) -> NDArray[float64]`
@@ -539,7 +539,7 @@ This field records the lower position limit of the joint.
 - `get_joint_firmware_date() -> NDArray[uint32]`
   *Get cached all joint firmware build dates of the finger*
 
-#### 2.2.3 Joint Control (Supports Single Value or 4-Element Array)
+#### Joint Control (Supports Single Value or 4-Element Array)
 
 ##### Enable Control
 - `write_joint_enabled(value, timeout=0.5) -> None`
@@ -630,9 +630,9 @@ This field records the lower position limit of the joint.
 - `write_joint_reset_error_unchecked(value_array, timeout=0.5) -> None`
   *Non-blocking batch reset each joint error of the finger*
 
-### 2.3 Joint Class
+### Joint Class
 
-#### 2.3.1 Joint Data (Returns Single Value)
+#### Joint Data (Returns Single Value)
 
 ##### Position Data
 - `read_joint_actual_position(timeout=0.5) -> float64`
@@ -719,7 +719,7 @@ This field records the lower position limit of the joint.
 - `get_joint_firmware_date() -> uint32`
   *Get cached joint firmware build date*
 
-#### 2.3.2 Joint Control (Single Value)
+#### Joint Control (Single Value)
 
 ##### Enable Control
 - `write_joint_enabled(value, timeout=0.5) -> None`
@@ -774,9 +774,9 @@ This field records the lower position limit of the joint.
 - `write_joint_reset_error_unchecked(value, timeout=0.5) -> None`
   *Non-blocking reset joint error*
 
-### 2.4 IController Interface
+### IController Interface
 
-#### 2.4.1 Context Management
+#### Context Management
 - `__enter__() -> IController`
   *Context manager entry supporting with statement*
 - `__exit__(arg0, arg1, arg2) -> None`
@@ -784,7 +784,7 @@ This field records the lower position limit of the joint.
 - `close() -> None`
   *Manually close the real-time controller*
 
-#### 2.4.2 Real-time Data Retrieval
+#### Real-time Data Retrieval
 - `get_joint_actual_position() -> NDArray[float64]`
   *Real-time get all joint actual positions (high-frequency read, returns {5,4} array)*
 - `get_joint_actual_effort() -> NDArray[float64]`
@@ -799,20 +799,20 @@ This field records the lower position limit of the joint.
 - Calculate output percentage via `effort / effort_limit`
 </Callout>
 
-#### 2.4.3 Real-time Data Setting
+#### Real-time Data Setting
 - `set_joint_target_position(value_array) -> None`
   *Real-time set all joint target positions (high-frequency write, parameter is {5,4} array)*
 
 ---
 
-### 2.5 Array Shape Description
+### Array Shape Description
 
 - **Hand Class Batch Operations**: Returns/receives arrays shaped `{5, 4}` (5 fingers × 4 joints)
 - **Finger Class Batch Operations**: Returns/receives arrays shaped `{4}` (4 joints)
 - **Joint Class Operations**: Returns/receives scalar values (single joint)
 - **IController Operations**: Handles arrays shaped `{5, 4}` for high-frequency real-time control
 
-### 2.6 Operation Mode Description
+### Operation Mode Description
 
 - **Synchronous Operations** (`read_*`, `write_*`): Blocking operations, ensure read/write success
 - **Asynchronous Operations** (`*_async`): Returns Awaitable objects, supports await syntax
@@ -822,11 +822,11 @@ This field records the lower position limit of the joint.
 
 ---
 
-## 3. Tactile Sensing Glove
+## Tactile Sensing Glove
 
 The Tactile Sensing Glove is an optional tactile perception accessory for Wuji Hand. The SDK provides device connection and data reading through the `TactileGlove` class.
 
-### 3.1 Core Classes
+### Core Classes
 
 #### TactileHandedness
 
@@ -863,7 +863,7 @@ TactileGlove(serial_number: str | None = None)
 `serial_number` is the USB device serial number. Pass `None` to auto-discover the only attached device. Raises if more than one is present.
 </Callout>
 
-### 3.2 Device Connection
+### Device Connection
 
 #### Auto-discovery
 ```python
@@ -891,7 +891,7 @@ with TactileGlove() as glove:
 - `is_connected() -> bool`: Query connection status
 - `get_handedness() -> TactileHandedness`: Return device handedness
 
-### 3.3 Data Reading
+### Data Reading
 
 #### Blocking read
 
@@ -926,7 +926,7 @@ glove.stop_streaming()
 - `start_streaming` and `read_frame` are mutually exclusive
 - All blocking operations release the Python GIL
 
-### 3.4 Configuration and Diagnostics
+### Configuration and Diagnostics
 
 | Method | Description |
 |--------|-------------|
@@ -944,14 +944,14 @@ glove.stop_streaming()
 | `reset_device()` | Soft reset. The device drops off the bus and re-enumerates—call `connect()` again afterward |
 | `enter_bootloader(magic)` | Jump to bootloader for OTA. Pass `TACTILE_BOOTLOADER_MAGIC` |
 
-### 3.5 Exception Handling
+### Exception Handling
 
 | Exception | Trigger |
 |-----------|---------|
 | `RuntimeError` | `read_frame` timeout, USB device disconnected during read, `read_frame` called when not connected, or `start_streaming` called while already streaming |
 | `TactileError` | Device-reported protocol error from a command (bad length, bad CRC, unknown command, bad payload) |
 
-### 3.6 Complete Example
+### Complete Example
 
 Covers the full `TactileGlove` workflow: auto-discovery and device info queries, host/device clock synchronization, sample-rate configuration, blocking reads and streaming callbacks, data saving, and diagnostic counters. `reset_device` and `enter_bootloader` close the current connection (device reset or jump to bootloader, respectively) and appear only as trailing comments.
 
@@ -1069,7 +1069,7 @@ Collected 326 frames, CRC errors 0, dropouts 0, USB resets 0, uptime 142628802 m
 Saved 326 frames to tactile_data.npy
 ```
 
-### 3.7 Use with Wuji Hand
+### Use with Wuji Hand
 
 `Hand` and `TactileGlove` use independent USB transports and threads, so the two APIs compose in the same process with no extra coordination. The frame callback fires on the glove's streaming consumer thread, while joint commands run on the thread that calls them. This pattern enables closed-loop scenarios where tactile feedback drives motion—for example, scaling joint amplitude by the current pressure peak.
 
@@ -1083,7 +1083,7 @@ Reference example: [`example/joint_with_tactile.py`](https://github.com/wuji-tec
 - Releasing the glove restores the full amplitude
 - Ctrl-C stops streaming, disables joints, and disconnects the glove cleanly
 
-### 3.8 Protocol Reference
+### Protocol Reference
 
 This section is for advanced developers who need to parse tactile data frames directly. The `TactileGlove` class handles all protocol details automatically.
 
@@ -1195,11 +1195,11 @@ with serial.Serial("/dev/ttyACM0", timeout=1.0) as port:
 
 ---
 
-## 4. logging Module
+## logging Module
 
-The `wujihandpy.logging` submodule configures SDK logging at runtime. For default behavior, environment variables, and troubleshooting tips, see [Getting Started - Get Logs](../introduction#53-get-logs).
+The `wujihandpy.logging` submodule configures SDK logging at runtime. For default behavior, environment variables, and troubleshooting tips, see [Getting Started - Get Logs](../introduction#get-logs).
 
-### 4.1 Level Enum
+### Level Enum
 
 | Member | Value | Meaning |
 | :--- | :--- | :--- |
@@ -1211,7 +1211,7 @@ The `wujihandpy.logging` submodule configures SDK logging at runtime. For defaul
 | `Level.Critical` | 5 | Critical errors |
 | `Level.Off` | 6 | Disable logging |
 
-### 4.2 Functions
+### Functions
 
 #### set_log_path
 
