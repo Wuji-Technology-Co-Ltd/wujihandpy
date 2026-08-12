@@ -3,15 +3,15 @@ title: 入门
 description: 了解 Wuji Hand SDK (wujihandpy) 的安装配置、快速上手示例及核心概念，包括设备模型和数据模型。
 ---
 
-## 1. 兼容性与要求
+## 兼容性与要求
 - CPU：x86_64 (AMD64) / arm64 (aarch64)
 - Python：3.8–3.14
 - 操作系统：Ubuntu 22.04 LTS / Ubuntu 24.04 LTS
 
-## 2. 安装指南
+## 安装指南
 本节介绍 wujihandpy 的安装方法和常见问题解决。  
 
-### 2.1 安装
+### 安装
 wujihandpy 支持 `pip` 一键安装：
 ```bash
 python3 -m pip install wujihandpy
@@ -29,10 +29,10 @@ sudo udevadm trigger
 ```
 
 <Callout type="info">
-  说明：安装过程中常见报错及处理方式，参见文末的 [故障排除 - 安装](#51-安装)。
+  说明：安装过程中常见报错及处理方式，参见文末的 [故障排除 - 安装问题](#安装问题)。
 </Callout>
 
-## 3. 快速上手
+## 快速上手
 本节给出最小可运行示例，快速测试灵巧手与 wujihandpy 库。
 ```python
 # quickstart.py
@@ -59,13 +59,13 @@ python3 quickstart.py
 ```
 
 <Callout type="info">
-  说明：快速上手阶段常见的连接与权限问题，参见文末的 [故障排除 - 快速上手](#52-快速上手)。
+  说明：快速上手阶段常见的连接与权限问题，参见文末的 [故障排除 - 快速上手问题](#快速上手问题)。
 </Callout>
 
-## 4. 核心概念
+## 核心概念
 本节介绍 wujihandpy 的设备模型和数据模型，帮助理解库的整体架构和使用方式。
 
-### 4.1 设备模型
+### 设备模型
 wujihandpy 拥有三层设备模型，分别为 Hand, Finger, Joint。其层级关系为：`Hand.finger(i) -> Finger`，`Finger.joint(j) -> Joint`。其中，
 - **Hand** 表示完整的灵巧手设备，可通过 wujihandpy.Hand() 创建。
 - **Finger** 是对 Hand 的轻量引用，不持有独立状态，可多次构造和销毁。Finger 对象可由 `hand.finger(i)` (0 ≤ i < 5) 构造，i 与实际手指的具体对应关系如下：
@@ -79,10 +79,10 @@ wujihandpy 拥有三层设备模型，分别为 Hand, Finger, Joint。其层级�
   - ...
   - 3：远端关节
 
-### 4.2 数据模型
+### 数据模型
 数据是可读/可写的对象，与设备类似，数据也存在层级关系：
 <Callout type="info">
-  说明：此处仅列举部分数据字段作为示例，完整 API Reference 参见 [字段列表](../api-reference/#1-字段列表)。
+  说明：此处仅列举部分数据字段作为示例，完整 API Reference 参见 [字段列表](../api-reference/#字段列表)。
 
 </Callout>
 - **Hand** 层：整手唯一的数据位于该层，例如：
@@ -103,11 +103,11 @@ wujihandpy 拥有三层设备模型，分别为 Hand, Finger, Joint。其层级�
   说明：属于 Joint 层的所有数据，在命名上均以 `joint` 开头。
 </Callout>
 
-## 5. 故障排除
+## 故障排除
 
-### 5.1 安装
+### 安装问题
 
-#### 5.1.1 升级 pip
+#### 升级 pip
 若出现 `Could not find a version that satisfies the requirement`，例如在较旧的 Python 或 pip 环境中：
 ```text
 ERROR: Could not find a version that satisfies the requirement wujihandpy (from versions: none)
@@ -117,9 +117,9 @@ ERROR: No matching distribution found for wujihandpy
 ```bash
 python3 -m pip install --upgrade pip && python3 -m pip install wujihandpy
 ```
-若问题未解决，请确认系统版本和 Python 版本是否符合 [兼容性与要求](#1-兼容性与要求)。
+若问题未解决，请确认系统版本和 Python 版本是否符合 [兼容性与要求](#兼容性与要求)。
 
-#### 5.1.2 使用虚拟环境
+#### 使用虚拟环境
 若出现 `This environment is externally managed`，例如在启用了系统托管 Python 的 Ubuntu 环境中：
 ```text
 error: externally-managed-environment
@@ -145,9 +145,9 @@ hint: See PEP 668 for the detailed specification.
 ```
 这表示 pip 被系统包管理器接管，需要使用虚拟环境 (venv) 进行安装。
 
-### 5.2 快速上手
+### 快速上手问题
 
-#### 5.2.1 灵巧手未连接
+#### 灵巧手未连接
 ```text
 [ERROR] No device found with specified vendor id (0x0483)
 Traceback (most recent call last):
@@ -163,7 +163,7 @@ Bus 001 Device 032: ID 0483:2000 WUJITECH WUJIHAND
 ```
 当使用 USB-C to USB-C 线束连接灵巧手时，部分电脑可能无法正确识别设备，请更换为 USB-A to USB-C 线束重试。
 
-#### 5.2.2 权限不足
+#### 权限不足
 ```text
 [ERROR] No device found with specified vendor id (0x0483)
 [ERROR]   Device 1 (0483:2000): Ignored because device could not be opened: -3 (ERROR_ACCESS)
@@ -175,16 +175,16 @@ Traceback (most recent call last):
 RuntimeError: Failed to init.
 ```
 若出现以上报错（ERROR_ACCESS），表示当前用户对 USB 设备没有读写权限。
-请检查 [安装](#21-安装) 中的 Linux udev 配置部分，完成权限配置后重试。
+请检查 [安装](#安装) 中的 Linux udev 配置部分，完成权限配置后重试。
 <Callout type="warning">
   注意：若在 Docker 镜像中开发 (DevContainer)，udev 配置命令仍需在宿主机中执行。
 </Callout>
 
-### 5.3 获取日志
+### 获取日志
 
 SDK 运行日志默认位于 `~/.wuji/log/`，文件名 `{timestamp}_{pid}.log`，单文件 10 MB 滚动，最多保留 5 个历史文件。遇到问题时将最近的日志发送给售后支持即可协助定位。
 
-#### 5.3.1 自定义路径与级别
+#### 自定义路径与级别
 
 **通过环境变量配置（推荐，零代码）**
 
@@ -220,9 +220,9 @@ wuji_logging.set_log_level(wuji_logging.Level.Debug)
 hand = wujihandpy.Hand()
 ```
 
-完整 API 参考与调用时机约束见 [API 参考 - logging 模块](../api-reference#4-logging-模块)。
+完整 API 参考与调用时机约束见 [API 参考 - logging 模块](../api-reference#logging-模块)。
 
-#### 5.3.2 采集详细日志
+#### 采集详细日志
 
 默认 `info` 级别只记录关键事件。当需要分析指令收发细节（如指令下发后实际状态未跟上），将级别调至 `debug` 获取 SDO/PDO 通信记录，或调至 `trace` 额外获取原始收发字节：
 

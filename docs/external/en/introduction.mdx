@@ -3,15 +3,15 @@ title: Getting Started
 description: Learn about Wuji Hand SDK (wujihandpy) installation, quick start examples, and core concepts including device model and data model.
 ---
 
-## 1. Compatibility and Requirements
+## Compatibility and Requirements
 - CPU: x86_64 (AMD64) / arm64 (aarch64)
 - Python: 3.8–3.14
 - OS: Ubuntu 22.04 LTS / Ubuntu 24.04 LTS
 
-## 2. Installation Guide
+## Installation Guide
 This section covers the installation of wujihandpy, system requirements, and common troubleshooting.  
 
-### 2.1 Installation
+### Installation
 wujihandpy supports one-step installation via `pip`:
 ```bash
 python3 -m pip install wujihandpy
@@ -29,10 +29,10 @@ sudo udevadm trigger
 ```
 
 <Callout type="info">
-  Note: For common installation errors and fixes, see [Troubleshooting - Installation](#51-installation) at the end of this page.
+  Note: For common installation errors and fixes, see [Troubleshooting - Installation Issues](#installation-issues) at the end of this page.
 </Callout>
 
-## 3. Quick Start
+## Quick Start
 This section provides a minimal working example to quickly test the dexterous hand with the wujihandpy library.
 ```python
 # quickstart.py
@@ -59,13 +59,13 @@ python3 quickstart.py
 ```
 
 <Callout type="info">
-  Note: For common connection and permission issues during quick start, see [Troubleshooting - Quick Start](#52-quick-start) at the end of this page.
+  Note: For common connection and permission issues during quick start, see [Troubleshooting - Quick Start Issues](#quick-start-issues) at the end of this page.
 </Callout>
 
-## 4. Core Concepts
+## Core Concepts
 This section introduces wujihandpy's device model and data model to help you understand the library's overall architecture and usage patterns.
 
-### 4.1 Device Model
+### Device Model
 wujihandpy has a three-layer device model: Hand, Finger, and Joint. The hierarchy is: `Hand.finger(i) -> Finger`, `Finger.joint(j) -> Joint`. Specifically:
 - **Hand** represents the complete dexterous hand device and can be created via wujihandpy.Hand().
 - **Finger** is a lightweight reference to Hand, does not hold independent state, and can be constructed and destroyed multiple times. Finger objects can be constructed via `hand.finger(i)` (0 ≤ i < 5), where i corresponds to actual fingers as follows:
@@ -79,10 +79,10 @@ wujihandpy has a three-layer device model: Hand, Finger, and Joint. The hierarch
   - ...
   - 3: Distal joint
 
-### 4.2 Data Model
+### Data Model
 Data consists of readable/writable objects. Similar to devices, data also has a hierarchical relationship:
 <Callout type="info">
-  Note: Only some data fields are listed here as examples. For the complete API Reference, see [Field List](../api-reference/#1-field-list).
+  Note: Only some data fields are listed here as examples. For the complete API Reference, see [Field List](../api-reference/#field-list).
 </Callout>
 - **Hand** layer: Data unique to the entire hand resides at this layer, for example:
   - `handedness`: Handedness (left/right hand)
@@ -102,11 +102,11 @@ Data consists of readable/writable objects. Similar to devices, data also has a 
   Note: All data belonging to the Joint layer is prefixed with `joint`.
 </Callout>
 
-## 5. Troubleshooting
+## Troubleshooting
 
-### 5.1 Installation
+### Installation Issues
 
-#### 5.1.1 Upgrade pip
+#### Upgrade pip
 If you encounter `Could not find a version that satisfies the requirement`, for example in an older Python or pip environment:
 ```text
 ERROR: Could not find a version that satisfies the requirement wujihandpy (from versions: none)
@@ -116,9 +116,9 @@ Consider upgrading pip and using the upgraded pip to install:
 ```bash
 python3 -m pip install --upgrade pip && python3 -m pip install wujihandpy
 ```
-If the issue remains unresolved, please verify that your system version and Python version meet the [Compatibility and Requirements](#1-compatibility-and-requirements).
+If the issue remains unresolved, please verify that your system version and Python version meet the [Compatibility and Requirements](#compatibility-and-requirements).
 
-#### 5.1.2 Using Virtual Environments
+#### Using Virtual Environments
 If you encounter `This environment is externally managed`, for example in Ubuntu environments where the system Python is managed by the OS:
 ```text
 error: externally-managed-environment
@@ -144,9 +144,9 @@ hint: See PEP 668 for the detailed specification.
 ```
 This indicates that pip is managed by the system package manager and requires using a virtual environment (venv) for installation.
 
-### 5.2 Quick Start
+### Quick Start Issues
 
-#### 5.2.1 Dexterous Hand Not Connected
+#### Dexterous Hand Not Connected
 ```text
 [ERROR] No device found with specified vendor id (0x0483)
 Traceback (most recent call last):
@@ -162,7 +162,7 @@ Bus 001 Device 032: ID 0483:2000 WUJITECH WUJIHAND
 ```
 When using a USB-C to USB-C cable to connect the dexterous hand, some computers may not properly recognize the device. Please try replacing it with a USB-A to USB-C cable.
 
-#### 5.2.2 Insufficient Permissions
+#### Insufficient Permissions
 ```text
 [ERROR] No device found with specified vendor id (0x0483)
 [ERROR]   Device 1 (0483:2000): Ignored because device could not be opened: -3 (ERROR_ACCESS)
@@ -174,16 +174,16 @@ Traceback (most recent call last):
 RuntimeError: Failed to init.
 ```
 If you encounter the above error (ERROR_ACCESS), it indicates that the current user does not have read/write permissions for the USB device.
-Please check the Linux udev configuration section in [Installation](#21-installation), complete the permission configuration, and try again.
+Please check the Linux udev configuration section in [Installation](#installation), complete the permission configuration, and try again.
 <Callout type="warning">
   Note: If developing in a Docker container (DevContainer), the udev configuration commands must still be executed on the host machine.
 </Callout>
 
-### 5.3 Get Logs
+### Get Logs
 
 SDK runtime logs are stored in `~/.wuji/log/` by default. File names follow `{timestamp}_{pid}.log`, with each file rolling at 10 MB and up to 5 historical files retained. Send the latest log to technical support when reporting an issue.
 
-#### 5.3.1 Custom Path and Level
+#### Custom Path and Level
 
 **Configure through environment variables (recommended, zero code)**
 
@@ -219,9 +219,9 @@ wuji_logging.set_log_level(wuji_logging.Level.Debug)
 hand = wujihandpy.Hand()
 ```
 
-For the full API reference and call-timing constraints, see [API Reference - logging Module](../api-reference#4-logging-module).
+For the full API reference and call-timing constraints, see [API Reference - logging Module](../api-reference#logging-module).
 
-#### 5.3.2 Collect Detailed Logs
+#### Collect Detailed Logs
 
 The default `info` level captures only key events. When you need detailed command flow analysis (for example, a command was sent but the actual state didn't follow), switch to `debug` for SDO/PDO traffic, or `trace` for the raw TX/RX bytes as well:
 
