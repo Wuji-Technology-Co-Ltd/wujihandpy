@@ -6,6 +6,9 @@
 # Python SDK / sdk-user-guide section). No dependency on wuji-docs-center
 # repos.json.
 #
+# 2026-08-19 起飞书卡片不再携带 prompt（跟进执行统一走本地 docs-followup
+# skill），本脚本保留为跟进判定规则的权威文本，需要手动渲染时可直接运行取用。
+#
 # Required environment variables:
 #   REPO         owner/name of the repository
 #   PR_NUMBER    The merged code PR number
@@ -27,7 +30,9 @@ EXTRA_PATHS="\`README.md\`、\`pyproject.toml\`（版本字段）、\`examples/\
 CHANGELOG_HINT="API 变更必须标明是否破坏兼容；示例代码与 docstring 同步更新"
 
 # Defensive: GitHub PR titles can in principle contain triple backticks, which
-# would prematurely close the Feishu fenced code block this prompt renders into.
+# would prematurely close a fenced code block wherever this prompt gets pasted
+# or rendered. Swap them to a visually-similar variant so any enclosing fence
+# stays intact; single backticks are fine per CommonMark rules.
 PR_TITLE_SAFE="${PR_TITLE//\`\`\`/ʼʼʼ}"
 
 cat <<EOF
